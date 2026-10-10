@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Split the 1,870-line `gui.py` into mixin modules (`controls`, `presets`, `background_panel`, `privacy`, `virtual_camera`, `constants`); UI verified pixel-identical
+
 ## 0.3.1 - 2026-10-10
 
 - Log file `~/.local/state/pixydeck/pixydeck.log` (rotating) with uncaught exceptions from the GUI and worker threads and Qt warnings; `PIXYDECK_DEBUG=1` for debug output

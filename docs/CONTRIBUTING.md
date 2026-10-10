@@ -50,6 +50,24 @@ Python `>=3.10`.
 - Code that talks to hardware gets a mock-based test where possible (see `test_focus_point_is_scaled_to_camera_range`).
 - Anything touching the camera also needs a manual check from [TESTING.md](TESTING.md).
 
+## Code layout
+
+| Module | Responsibility |
+| --- | --- |
+| `gui.py` | `PixyGUI` window: layout, preview, zoom, pan/tilt, auto-framing, snapshot, startup |
+| `controls.py` | `ControlsMixin` – on-board AI, focus, orientation, picture controls (AI & Image tabs) |
+| `presets.py` | `PresetsMixin` – pan/tilt/zoom presets and startup position |
+| `background_panel.py` | `BackgroundMixin` – green screen / AI background and its tab |
+| `privacy.py` | `PrivacyMixin` – privacy timer, wake on camera use, mic mute |
+| `virtual_camera.py` | `VirtualCameraMixin` – processed/direct virtual camera, Output tab |
+| `constants.py` | shared limits, modes and control tables |
+| `widgets.py` | theme and custom widgets |
+| `vision.py`, `background.py` | frame processing, auto-framing, stabilization, keying, matting |
+| `backend.py`, `worker.py` | UVC/HID control and the command thread |
+| `setup.py`, `diagnostics.py` | setup dialog, log file and crash capture |
+
+Mixins share the window's state through `self`; put new features in the mixin they belong to rather than growing `gui.py`.
+
 ## Code style
 
 - Match the surrounding code: type hints, `from __future__ import annotations`, small functions, comments that explain *why*.

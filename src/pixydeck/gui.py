@@ -3,37 +3,61 @@
 
 from __future__ import annotations
 
-import logging
-import os
-import shutil
-import subprocess
-import sys
-import time
 from datetime import datetime
 from pathlib import Path
+import logging
+import sys
+import time
 
-from PySide6.QtCore import QEvent, QObject, QProcess, QSettings, Qt, QTimer
-from PySide6.QtGui import QColor, QIcon, QKeySequence, QShortcut
-from PySide6.QtMultimedia import (
-    QCamera, QMediaCaptureSession, QMediaDevices, QVideoFrame, QVideoFrameFormat,
-)
+from PySide6.QtCore import QEvent, QObject, QProcess, QSettings, QTimer, Qt
+from PySide6.QtGui import QIcon, QKeySequence, QShortcut
+from PySide6.QtMultimedia import QCamera, QMediaCaptureSession, QMediaDevices, QVideoFrame, QVideoFrameFormat
 from PySide6.QtWidgets import (
-    QAbstractSpinBox, QApplication, QColorDialog, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout,
-    QLabel, QLineEdit, QMainWindow, QMenu, QPushButton, QScrollArea, QSlider,
-    QSpinBox, QStackedWidget, QTabWidget, QVBoxLayout, QWidget,
+    QAbstractSpinBox,
+    QApplication,
+    QComboBox,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QPushButton,
+    QScrollArea,
+    QSlider,
+    QStackedWidget,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
 
-from . import APP_ID, APP_NAME, VIRTUAL_CAMERA_NAME, __version__, backend
+from . import APP_ID, APP_NAME, __version__, backend
+from .backend import PixyController
+from .background_panel import BackgroundMixin
+from .constants import (
+    FOV_H,
+    FOV_V,
+    FRAMING,
+    HW_ZOOM_MAX,
+    PAN_LIMIT,
+    PRESET_SLOTS,
+    PREVIEW,
+    RELEASED,
+    TILT_MAX,
+    TILT_MIN,
+    VIRTUAL_DIRECT,
+    VIRTUAL_PROCESSED,
+    ZOOM_MAX,
+    ZOOM_MIN,
+)
+from .controls import ControlsMixin, apply_controls
 from .diagnostics import install_qt_message_handler, log_file, setup_logging
-from .backend import PixyController, camera_users, find_video_by_name, video_nodes
+from .presets import PresetsMixin
+from .privacy import PACTL, PrivacyMixin, set_pixy_microphone_muted
 from .setup import SetupDialog, needs_attention, run_checks
-from .vision import (
-    Background, Crop, FrameProcessor, Smoother, framing_target, matting_available, vision_available,
-)
-from .widgets import (
-    THEME, Card, InfoPanel, PreviewView, PtzPad, Segmented, SettingRow,
-    SliderRow, ToggleSwitch, section_title, set_state,
-)
+from .virtual_camera import VirtualCameraMixin
+from .vision import Crop, FrameProcessor, Smoother, framing_target, vision_available
+from .widgets import Card, InfoPanel, PreviewView, PtzPad, SettingRow, THEME
 from .worker import ControlWorker
 
 try:
@@ -44,35 +68,7 @@ except ImportError:  # pragma: no cover - optional extra
 log = logging.getLogger(__name__)
 PACKAGE_DIR = Path(__file__).resolve().parent
 ICON = PACKAGE_DIR / "assets" / "pixydeck.svg"
-FFMPEG = shutil.which("ffmpeg")
-PACTL = shutil.which("pactl")
 
-ZOOM_MIN, HW_ZOOM_MAX, ZOOM_MAX = 100, 150, 400
-PRESET_SLOTS = 4
-PAN_LIMIT = backend.PAN_MAX // backend.DEGREE_UNIT
-TILT_MIN = backend.TILT_MIN // backend.DEGREE_UNIT
-TILT_MAX = backend.TILT_MAX // backend.DEGREE_UNIT
-# Approximate field of view at 1x, used to turn preview clicks into angles.
-FOV_H, FOV_V = 70, 40
-
-IMAGE_SLIDERS = [
-    ("brightness", "Brightness"),
-    ("contrast", "Contrast"),
-    ("saturation", "Saturation"),
-    ("hue", "Hue"),
-    ("sharpness", "Sharpness"),
-    ("gamma", "Gamma"),
-    ("gain", "Gain"),
-]
-# (toggle label, auto control, (auto value, manual value), manual control, slider label, unit)
-IMAGE_AUTO = [
-    ("Auto white balance", "white_balance_automatic", (1, 0), "white_balance_temperature", "Temperature", " K"),
-    ("Auto exposure", "auto_exposure", (backend.EXPOSURE_APERTURE_PRIORITY, backend.EXPOSURE_MANUAL),
-     "exposure_time_absolute", "Exposure time", ""),
-    ("Autofocus", "focus_automatic_continuous", (1, 0), "focus_absolute", "Focus", ""),
-]
-AUTO_CONTROLS = [entry[1] for entry in IMAGE_AUTO]
-FRAMING = {"tight": 0.62, "medium": 0.45, "wide": 0.3}
 
 # Single source for keyboard shortcuts: installed by the window and listed
 # in the README. Entries without a method are handled elsewhere (arrow keys
@@ -91,27 +87,6 @@ SHORTCUTS = [
     (("Ctrl+Q",), "Quit", "close"),
 ]
 
-PREVIEW, RELEASED, VIRTUAL_DIRECT, VIRTUAL_PROCESSED = "preview", "released", "direct", "processed"
-
-
-def find_virtual_camera_device() -> str | None:
-    return find_video_by_name(VIRTUAL_CAMERA_NAME)
-
-
-def pixy_video_nodes() -> list[str]:
-    """All physical and virtual PIXY nodes, for noticing other apps using them."""
-    return [device for device, name in video_nodes() if "PIXY" in name.upper()]
-
-
-def apply_controls(controller: PixyController, values: dict[str, int]) -> None:
-    """Set picture controls, automatic modes first (the camera rejects manual
-    values while the matching auto mode is on). Unsupported ones are skipped."""
-    for name in sorted(values, key=lambda n: n not in AUTO_CONTROLS):
-        try:
-            controller.set(name, values[name])
-        except (backend.PixyError, KeyError) as exc:
-            log.debug("skipping control %s: %s", name, exc)
-
 
 def migrate_settings(settings: QSettings) -> None:
     """Carry settings over from emeet-pixy-control, the project PixyDeck grew from."""
@@ -121,23 +96,6 @@ def migrate_settings(settings: QSettings) -> None:
     for key in old.allKeys():
         settings.setValue(key, old.value(key))
     settings.sync()
-
-
-def set_pixy_microphone_muted(muted: bool) -> bool:
-    """Mute/unmute the PIXY microphone through PipeWire/PulseAudio."""
-    if not PACTL:
-        return False
-    result = subprocess.run([PACTL, "list", "short", "sources"], capture_output=True, text=True, check=False)
-    changed = False
-    for line in result.stdout.splitlines():
-        fields = line.split("\t")
-        if len(fields) < 2:
-            continue
-        name = fields[1]
-        if ("emeet" in name.lower() or "pixy" in name.lower()) and not name.endswith(".monitor"):
-            subprocess.run([PACTL, "set-source-mute", name, "1" if muted else "0"], check=False)
-            changed = True
-    return changed
 
 
 class KeyFilter(QObject):
@@ -169,7 +127,7 @@ class KeyFilter(QObject):
         return True
 
 
-class PixyGUI(QMainWindow):
+class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, VirtualCameraMixin, QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.settings = QSettings(APP_ID, APP_ID)
@@ -431,250 +389,6 @@ class PixyGUI(QMainWindow):
         layout.addStretch()
         return page
 
-    def build_ai_tab(self) -> QWidget:
-        page, layout = self.tab_page()
-
-        onboard = Card("PIXY on-board AI")
-        self.tracking = Segmented([("Off", "idle"), ("Face tracking", "track"), ("Privacy", "privacy")])
-        self.tracking.selected.connect(self.set_tracking_mode)
-        onboard.body.addWidget(self.tracking)
-        self.gesture = ToggleSwitch()
-        self.gesture.toggled.connect(self.set_gesture)
-        onboard.body.addWidget(SettingRow("Gesture control", self.gesture, "Hand gestures steer the camera"))
-        onboard.body.addWidget(section_title("Microphone"))
-        self.audio = Segmented([("Noise cancel", "nc"), ("Live", "live"), ("Original", "org")])
-        self.audio.selected.connect(self.set_audio)
-        onboard.body.addWidget(self.audio)
-        layout.addWidget(onboard)
-
-        focus = Card("AI focus")
-        self.focus_mode = Segmented([("Center", "center"), ("Face", "face"), ("Click point", "area")])
-        self.focus_mode.selected.connect(self.set_focus_mode)
-        focus.body.addWidget(self.focus_mode)
-        focus.body.addWidget(self.hint(
-            "The PIXY's second lens steers autofocus and exposure. With “Click point”, "
-            "click anything in the preview – e.g. an object you hold up – to focus on it."))
-        layout.addWidget(focus)
-
-        framing = Card("Auto-framing (software)")
-        self.autoframe = ToggleSwitch()
-        self.autoframe.toggled.connect(self.set_autoframe)
-        self.autoframe_row = SettingRow(
-            "Auto-framing", self.autoframe,
-            "Digitally zooms and follows faces – also at 4K and in the processed virtual camera (F)")
-        framing.body.addWidget(self.autoframe_row)
-        self.framing = Segmented([("Wide", "wide"), ("Medium", "medium"), ("Tight", "tight")])
-        self.framing.selected.connect(lambda v: self.settings.setValue("ai/framing", v))
-        framing.body.addWidget(self.framing)
-        self.show_faces = ToggleSwitch()
-        self.show_faces.toggled.connect(self.set_show_faces)
-        framing.body.addWidget(SettingRow("Show detected faces", self.show_faces))
-        if not vision_available():
-            for widget in (self.autoframe, self.framing, self.show_faces):
-                widget.setEnabled(False)
-            self.autoframe_row.hint.setText(
-                "Needs the optional AI extra: pip install 'pixydeck[ai]'")
-        layout.addWidget(framing)
-
-        privacy = Card("Privacy timer")
-        self.privacy_enabled = ToggleSwitch()
-        self.privacy_enabled.toggled.connect(lambda v: self.settings.setValue("privacy/enabled", v))
-        privacy.body.addWidget(SettingRow(
-            "Enter privacy when idle", self.privacy_enabled,
-            "The lens turns away when no app has used the camera for a while"))
-        self.privacy_minutes = QSpinBox()
-        self.privacy_minutes.setRange(1, 240)
-        self.privacy_minutes.setSuffix(" min")
-        self.privacy_minutes.valueChanged.connect(lambda v: self.settings.setValue("privacy/minutes", v))
-        privacy.body.addWidget(SettingRow("Idle time", self.privacy_minutes))
-        self.privacy_wake = ToggleSwitch()
-        self.privacy_wake.toggled.connect(lambda v: self.settings.setValue("privacy/wake", v))
-        privacy.body.addWidget(SettingRow(
-            "Wake when an app needs the camera", self.privacy_wake,
-            "Leaves privacy mode as soon as Zoom, Teams, Meet, OBS … open the PIXY"))
-        self.privacy_mic = ToggleSwitch()
-        self.privacy_mic.toggled.connect(lambda v: self.settings.setValue("privacy/mute_mic", v))
-        self.privacy_mic.setEnabled(bool(PACTL))
-        privacy.body.addWidget(SettingRow(
-            "Mute PIXY microphone in privacy", self.privacy_mic,
-            "Via PipeWire/PulseAudio" if PACTL else "pactl not found"))
-        self.privacy_status = QLabel("", objectName="subtle")
-        privacy.body.addWidget(self.privacy_status)
-        layout.addWidget(privacy)
-        layout.addStretch()
-        return page
-
-    def build_image_tab(self) -> QWidget:
-        page, layout = self.tab_page()
-
-        picture = Card("Picture")
-        self.image_sliders: dict[str, SliderRow] = {}
-        for control, label in IMAGE_SLIDERS:
-            row = SliderRow(label, 0, 255, 128)
-            row.value_changed.connect(lambda v, c=control: self.set_image_control(c, v))
-            picture.body.addWidget(row)
-            self.image_sliders[control] = row
-        layout.addWidget(picture)
-
-        auto = Card("Automatic modes")
-        self.auto_toggles: dict[str, ToggleSwitch] = {}
-        for label, auto_control, values, manual, slider_label, unit in IMAGE_AUTO:
-            toggle = ToggleSwitch()
-            toggle.toggled.connect(
-                lambda on, a=auto_control, v=values, m=manual: self.set_auto_mode(a, v, m, on))
-            auto.body.addWidget(SettingRow(label, toggle))
-            slider = SliderRow(slider_label, 0, 100, 0, fmt=lambda v, u=unit: f"{v}{u}")
-            slider.value_changed.connect(lambda v, c=manual: self.set_image_control(c, v))
-            auto.body.addWidget(slider)
-            self.auto_toggles[auto_control] = toggle
-            self.image_sliders[manual] = slider
-        self.backlight = ToggleSwitch()
-        self.backlight.toggled.connect(
-            lambda on: self.set_image_control("backlight_compensation", 2 if on else 1))
-        auto.body.addWidget(SettingRow("Backlight compensation", self.backlight))
-        layout.addWidget(auto)
-
-        stabilize = Card("Stabilization")
-        self.stabilize = ToggleSwitch()
-        self.stabilize.toggled.connect(self.set_stabilization)
-        self.stabilize_row = SettingRow(
-            "Steady picture", self.stabilize,
-            "Cancels shake, e.g. from a wobbling monitor or desk. Uses an 8 % digital zoom "
-            "as reserve; pans and PTZ moves pass through.")
-        stabilize.body.addWidget(self.stabilize_row)
-        if not vision_available():
-            self.stabilize.setEnabled(False)
-            self.stabilize_row.hint.setText("Needs the optional AI extra (OpenCV).")
-        layout.addWidget(stabilize)
-
-        orientation = Card("Orientation")
-        self.feature_toggles: dict[str, ToggleSwitch] = {}
-        for name, label, hint in (
-            ("hflip", "Mirror horizontally", None),
-            ("vflip", "Flip vertically", None),
-            ("autorotate", "Auto-rotate when upside down", "For ceiling or under-monitor mounting"),
-        ):
-            toggle = ToggleSwitch()
-            toggle.toggled.connect(lambda on, n=name: self.set_feature(n, on))
-            orientation.body.addWidget(SettingRow(label, toggle, hint))
-            self.feature_toggles[name] = toggle
-        layout.addWidget(orientation)
-
-        power = Card("Anti-flicker")
-        self.flicker = Segmented([("Off", "off"), ("50 Hz", "50"), ("60 Hz", "60")])
-        self.flicker.selected.connect(self.set_flicker)
-        power.body.addWidget(self.flicker)
-        layout.addWidget(power)
-
-        reset = QPushButton("Reset picture to camera defaults")
-        reset.clicked.connect(self.reset_image)
-        layout.addWidget(reset)
-        layout.addStretch()
-        return page
-
-    def build_background_tab(self) -> QWidget:
-        page, layout = self.tab_page()
-
-        screen = Card("Background replacement")
-        self.bg_mode = Segmented([("Off", "off"), ("Auto", "auto"), ("Green screen", "chroma"), ("AI", "ai")])
-        self.bg_mode.selected.connect(lambda _m: self.apply_background())
-        screen.body.addWidget(self.bg_mode)
-        self.bg_status = QLabel("", objectName="subtle")
-        self.bg_status.setWordWrap(True)
-        screen.body.addWidget(self.bg_status)
-        screen.body.addWidget(self.hint(
-            "Green screen keys the exact shade it detects at the picture's edges. AI cuts you "
-            "out of any room (more CPU, up to 30 fps). Auto uses the green screen when one is "
-            "in view and AI otherwise. Works in the preview and the processed virtual camera."))
-        layout.addWidget(screen)
-
-        fill = Card("Replace with")
-        self.bg_fill = Segmented([("Blur", "blur"), ("Gradient", "gradient"), ("Color", "color"), ("Image", "image")])
-        self.bg_fill.selected.connect(self.background_fill_selected)
-        fill.body.addWidget(self.bg_fill)
-        buttons = QHBoxLayout()
-        self.bg_color_button = QPushButton("Choose color…")
-        self.bg_color_button.clicked.connect(self.choose_background_color)
-        self.bg_image_button = QPushButton("Choose image…")
-        self.bg_image_button.clicked.connect(self.choose_background_image)
-        buttons.addWidget(self.bg_color_button)
-        buttons.addWidget(self.bg_image_button)
-        fill.body.addLayout(buttons)
-        self.bg_image_label = QLabel("", objectName="subtle")
-        self.bg_image_label.setWordWrap(True)
-        fill.body.addWidget(self.bg_image_label)
-        self.bg_blur = SliderRow("Blur strength", 1, 20, 6)
-        self.bg_blur.slider.valueChanged.connect(lambda _v: self.background_timer.start())
-        fill.body.addWidget(self.bg_blur)
-        layout.addWidget(fill)
-
-        tuning = Card("Green screen fine-tuning")
-        self.bg_similarity = SliderRow("Similarity", 5, 45, 20, fmt=lambda v: f"{v}%")
-        self.bg_smoothness = SliderRow("Edge softness", 2, 40, 10, fmt=lambda v: f"{v}%")
-        self.bg_spill = SliderRow("Green spill removal", 0, 100, 70, fmt=lambda v: f"{v}%")
-        for row in (self.bg_similarity, self.bg_smoothness, self.bg_spill):
-            row.slider.sliderReleased.connect(self.apply_background)
-            row.slider.valueChanged.connect(lambda _v: self.background_timer.start())
-            tuning.body.addWidget(row)
-        tuning.body.addWidget(self.hint(
-            "Raise similarity if green remains, lower it if parts of you disappear. "
-            "Spill removal takes the green tint off hair and edges."))
-        layout.addWidget(tuning)
-
-        self.background_timer = QTimer(self, singleShot=True, interval=120)
-        self.background_timer.timeout.connect(self.apply_background)
-        self.bg_color = (40, 40, 40)
-        self.bg_image_path = ""
-        if not vision_available():
-            for widget in (self.bg_mode, self.bg_fill, self.bg_color_button, self.bg_image_button,
-                           self.bg_similarity, self.bg_smoothness, self.bg_spill, self.bg_blur):
-                widget.setEnabled(False)
-            self.bg_status.setText("Needs the optional AI extra: pip install 'pixydeck[ai]'")
-        layout.addStretch()
-        return page
-
-    def build_output_tab(self) -> QWidget:
-        page, layout = self.tab_page()
-
-        virtual = Card("Virtual camera")
-        self.virtual_mode = Segmented([("Processed", VIRTUAL_PROCESSED), ("Direct", VIRTUAL_DIRECT)])
-        self.virtual_mode.selected.connect(self.virtual_mode_changed)
-        virtual.body.addWidget(self.virtual_mode)
-        self.virtual_mode_hint = self.hint("")
-        virtual.body.addWidget(self.virtual_mode_hint)
-        self.output_size = QComboBox()
-        for w, h in ((1920, 1080), (1280, 720), (960, 540)):
-            self.output_size.addItem(f"{w} × {h}", f"{w}x{h}")
-        self.output_size.currentIndexChanged.connect(
-            lambda: self.settings.setValue("virtual/output_size", self.output_size.currentData()))
-        self.output_size_row = SettingRow("Output size", self.output_size)
-        virtual.body.addWidget(self.output_size_row)
-        self.fps = QComboBox()
-        self.fps.currentIndexChanged.connect(self.fps_changed)
-        self.fps_row = SettingRow("Frame rate", self.fps, "30 fps keeps hardware zoom working at 1080p")
-        virtual.body.addWidget(self.fps_row)
-        buttons = QHBoxLayout()
-        self.virtual_start = QPushButton("Start", objectName="primary")
-        self.virtual_start.clicked.connect(self.start_virtual_camera)
-        self.virtual_stop = QPushButton("Stop", objectName="danger")
-        self.virtual_stop.clicked.connect(lambda: self.stop_virtual_camera(True))
-        self.virtual_stop.setEnabled(False)
-        buttons.addWidget(self.virtual_start)
-        buttons.addWidget(self.virtual_stop)
-        virtual.body.addLayout(buttons)
-        self.virtual_device_status = QLabel("Device: checking…", objectName="subtle")
-        self.virtual_status = QLabel("Pipeline: stopped", objectName="subtle")
-        virtual.body.addWidget(self.virtual_device_status)
-        virtual.body.addWidget(self.virtual_status)
-        layout.addWidget(virtual)
-
-        direct = Card("Direct use by other apps")
-        direct.body.addWidget(self.hint(
-            "“Release camera” frees the physical PIXY so Meet, OBS or Teams can open it "
-            "directly. Pan/tilt, tracking, privacy and picture controls keep working."))
-        layout.addWidget(direct)
-        layout.addStretch()
-        return page
 
     def install_shortcuts(self) -> None:
         for keys, _description, method in SHORTCUTS:
@@ -1237,340 +951,6 @@ class PixyGUI(QMainWindow):
         if not self.autoframe.isChecked():
             self.set_zoom(ZOOM_MIN, flash=True)
 
-    # ------------------------------------------------------------------
-    # Presets
-    # ------------------------------------------------------------------
-
-    def preset(self, slot: int) -> tuple[int, int, int] | None:
-        value = self.settings.value(f"presets/{slot}")
-        if not value:
-            return None
-        try:
-            pan, tilt, zoom = (int(v) for v in str(value).split(","))
-        except ValueError:
-            return None
-        return pan, tilt, zoom
-
-    def startup_position_changed(self) -> None:
-        self.settings.setValue("presets/startup", self.startup_position.currentData())
-        self.refresh_preset_buttons()
-
-    def refresh_preset_buttons(self) -> None:
-        startup = str(self.startup_position.currentData())
-        for slot, button in enumerate(self.preset_buttons, start=1):
-            preset = self.preset(slot)
-            is_startup = startup == str(slot)
-            button.setProperty("filled", preset is not None)
-            button.setProperty("startup", is_startup)
-            button.setText(f"★ {slot}" if is_startup else str(slot))
-            if preset is None:
-                button.setToolTip(f"Preset {slot}: empty – click to store the current position")
-            else:
-                pan, tilt, zoom = preset
-                extra = " · startup position" if is_startup else ""
-                button.setToolTip(f"Preset {slot}: pan {pan:+d}°, tilt {tilt:+d}°, zoom {zoom / 100:.1f}×{extra}")
-            button.style().unpolish(button)
-            button.style().polish(button)
-
-    def preset_clicked(self, slot: int) -> None:
-        if self.preset(slot) is None:
-            self.store_preset(slot)
-        else:
-            self.recall_preset(slot)
-
-    def store_preset(self, slot: int) -> None:
-        pan, tilt = self.position
-        self.settings.setValue(f"presets/{slot}", f"{pan},{tilt},{self.zoom_value}")
-        self.refresh_preset_buttons()
-        self.notify(f"Preset {slot} stored (pan {pan:+d}°, tilt {tilt:+d}°)")
-
-    def recall_preset(self, slot: int) -> None:
-        preset = self.preset(slot)
-        if preset is None:
-            self.notify(f"Preset {slot} is empty")
-            return
-        pan, tilt, zoom = preset
-        self.aim_at(pan, tilt)
-        if not self.autoframe.isChecked():
-            self.manual_center = (0.5, 0.5)
-            self.set_zoom(zoom)
-        self.notify(f"Preset {slot}")
-
-    def preset_menu(self, slot: int) -> None:
-        filled = self.preset(slot) is not None
-        menu = QMenu(self)
-        menu.addAction("Go to preset", lambda: self.recall_preset(slot)).setEnabled(filled)
-        menu.addAction("Store current position here", lambda: self.store_preset(slot))
-        menu.addAction(
-            "Use as startup position",
-            lambda: self.startup_position.setCurrentIndex(self.startup_position.findData(str(slot))),
-        ).setEnabled(filled)
-
-        def clear() -> None:
-            self.settings.remove(f"presets/{slot}")
-            if self.startup_position.currentData() == str(slot):
-                self.startup_position.setCurrentIndex(0)
-            self.refresh_preset_buttons()
-
-        menu.addAction("Clear", clear).setEnabled(filled)
-        menu.exec(self.cursor().pos())
-
-    # ------------------------------------------------------------------
-    # On-board AI / audio / picture
-    # ------------------------------------------------------------------
-
-    def show_tracking_state(self) -> None:
-        mode = self.tracking_mode
-        self.tracking.set_current(mode)
-        self.pill_tracking.setText({"idle": "Tracking off", "track": "Face tracking", "privacy": "Privacy"}[mode])
-        set_state(self.pill_tracking, {"idle": "", "track": "on", "privacy": "warn"}[mode])
-
-    def set_tracking_mode(self, mode: str, by_timer: bool = False) -> None:
-        if mode == "privacy" and self.tracking_mode != "privacy":
-            self.mode_before_privacy = self.tracking_mode
-        self.privacy_by_timer = by_timer and mode == "privacy"
-        self.tracking_changed_at = time.monotonic()
-        self.tracking_mode = mode
-        self.settings.setValue("camera/tracking", mode)
-        self.show_tracking_state()
-        text = self.pill_tracking.text()
-        self.worker.submit(self.controller.tracking, mode, key="tracking", done=lambda _: self.notify(text))
-        if mode == "privacy" and self.privacy_mic.isChecked() and not self.mic_muted_by_us:
-            self.mic_muted_by_us = True
-            self.worker.submit(set_pixy_microphone_muted, True)
-        elif mode != "privacy" and self.mic_muted_by_us:
-            self.mic_muted_by_us = False
-            self.worker.submit(set_pixy_microphone_muted, False)
-        self.idle_seconds = 0
-
-    def set_gesture(self, enabled: bool) -> None:
-        self.settings.setValue("camera/gesture", enabled)
-        self.worker.submit(self.controller.gesture, enabled, key="gesture",
-                           done=lambda _: self.notify(f"Gesture control {'on' if enabled else 'off'}"))
-
-    def set_audio(self, mode: str) -> None:
-        self.settings.setValue("camera/audio", mode)
-        self.worker.submit(self.controller.audio, mode, key="audio",
-                           done=lambda _: self.notify("Microphone mode updated"))
-
-    def set_flicker(self, mode: str) -> None:
-        self.settings.setValue("camera/flicker", mode)
-        self.worker.submit(self.controller.flicker, mode, key="flicker")
-
-    def set_focus_mode(self, mode: str) -> None:
-        if mode == "area":
-            self.notify("Click in the preview to choose the focus point")
-            x, y = self.focus_point
-            self.worker.submit(self.controller.focus_mode, "area", x, y, key="focus")
-        else:
-            self.worker.submit(self.controller.focus_mode, mode, key="focus",
-                               done=lambda _: self.notify(f"Focus: {mode}"))
-
-    def on_preview_click(self, nx: float, ny: float) -> None:
-        if self.focus_mode.current() != "area":
-            return
-        # nx/ny are already full-frame coordinates, also when digitally zoomed.
-        self.focus_point = (nx, ny)
-        self.view.show_focus_point(nx, ny)
-        self.worker.submit(self.controller.focus_mode, "area", nx, ny, key="focus")
-
-    def set_feature(self, name: str, enabled: bool) -> None:
-        self.worker.submit(self.controller.feature, name, enabled, key=f"feature/{name}")
-
-    def set_stabilization(self, enabled: bool) -> None:
-        self.settings.setValue("effects/stabilize", enabled)
-        self.processor.set_stabilization(enabled)
-        if not enabled and not self.processor.background_active:
-            self.view.set_processed(None)
-        self.notify("Stabilization on" if enabled else "Stabilization off")
-
-    def min_digital_zoom(self) -> float:
-        """Reserve border for the stabilizer to shift into."""
-        if self.processor.stabilizing:
-            return 1.0 + 2 * self.processor.stabilization_margin
-        return 1.0
-
-    def poll_camera_state(self) -> None:
-        self.status_worker.submit(self.controller.state, key="state", done=self.on_camera_state)
-
-    def on_camera_state(self, state: dict) -> None:
-        """Mirror changes made on the camera itself (gestures, other apps)."""
-        if "audio" in state and state["audio"] != self.audio.current():
-            self.audio.set_current(state["audio"])
-            self.settings.setValue("camera/audio", state["audio"])
-        if "gesture" in state and state["gesture"] != self.gesture.isChecked():
-            self.gesture.set_silently(state["gesture"])
-            self.settings.setValue("camera/gesture", state["gesture"])
-        if "focus" in state and state["focus"] != self.focus_mode.current():
-            self.focus_mode.set_current(state["focus"])
-        for name, toggle in self.feature_toggles.items():
-            if name in state and state[name] != toggle.isChecked():
-                toggle.set_silently(state[name])
-        tracking = state.get("tracking")
-        if time.monotonic() - self.tracking_changed_at < 4:
-            tracking = None  # the camera reports our own change with a delay
-        if tracking == "privacy" and self.tracking_mode != "privacy":
-            self.mode_before_privacy = self.tracking_mode
-            self.tracking_mode = "privacy"
-            self.show_tracking_state()
-        elif tracking in ("idle", "track") and tracking != self.tracking_mode:
-            self.tracking_mode = tracking
-            self.show_tracking_state()
-
-    def set_image_control(self, control: str, value: int) -> None:
-        self.settings.setValue(f"image/{control}", value)
-        self.worker.submit(self.controller.set, control, value, key=f"image/{control}")
-
-    def set_auto_mode(self, auto_control: str, values: tuple[int, int], manual: str, on: bool) -> None:
-        self.set_image_control(auto_control, values[0] if on else values[1])
-        self.image_sliders[manual].setEnabled(not on)
-        if not on:
-            # Start the manual slider from what the camera had chosen automatically.
-            self.worker.submit(self.controller.get, manual,
-                               done=lambda v, m=manual: self.image_sliders[m].set_value_silently(v))
-
-    def load_image_controls(self) -> None:
-        names = list(self.image_sliders) + AUTO_CONTROLS + ["backlight_compensation"]
-
-        def read() -> dict:
-            result = {}
-            for name in names:
-                info = self.controller.query(name)
-                if info is None:
-                    continue
-                try:
-                    info["value"] = self.controller.get(name)
-                except backend.PixyError as exc:
-                    log.debug("cannot read %s: %s", name, exc)
-                    continue
-                result[name] = info
-            return result
-
-        self.worker.submit(read, done=self.on_image_controls)
-
-    def on_image_controls(self, controls: dict) -> None:
-        for name, row in self.image_sliders.items():
-            info = controls.get(name)
-            row.setEnabled(info is not None)
-            if info is None:
-                continue
-            row.set_range(info["min"], info["max"])
-            row.set_value_silently(info["value"])
-            row.slider.setToolTip(f"Range {info['min']}–{info['max']}, default {info['default']}")
-        for _label, auto_control, values, manual, _slider, _unit in IMAGE_AUTO:
-            info = controls.get(auto_control)
-            toggle = self.auto_toggles[auto_control]
-            toggle.setEnabled(info is not None)
-            if info is None:
-                continue
-            on = info["value"] == values[0]
-            toggle.set_silently(on)
-            self.image_sliders[manual].setEnabled(not on and manual in controls)
-        backlight = controls.get("backlight_compensation")
-        self.backlight.setEnabled(backlight is not None)
-        if backlight is not None:
-            self.backlight.set_silently(backlight["value"] >= 2)
-        self.image_defaults = {name: info["default"] for name, info in controls.items()}
-
-    def reset_image(self) -> None:
-        defaults = dict(self.image_defaults)
-        if not defaults:
-            return
-        self.settings.remove("image")
-
-        def reset() -> bool:
-            apply_controls(self.controller, defaults)
-            return True
-
-        def done(_result) -> None:
-            self.load_image_controls()
-            self.notify("Picture reset to camera defaults")
-
-        self.worker.submit(reset, done=done)
-
-    # ------------------------------------------------------------------
-    # Background replacement
-    # ------------------------------------------------------------------
-
-    def apply_background(self) -> None:
-        if not vision_available():
-            return
-        mode = self.bg_mode.current() or "off"
-        fill = self.bg_fill.current() or "gradient"
-        background = Background(
-            mode=mode, fill=fill, color=self.bg_color, image_path=self.bg_image_path,
-            similarity=self.bg_similarity.value() / 100,
-            smoothness=self.bg_smoothness.value() / 100,
-            spill=self.bg_spill.value() / 100,
-            blur=float(self.bg_blur.value()),
-        )
-        self.processor.set_background(background)
-        for key, value in (("mode", mode), ("fill", fill), ("color", ",".join(map(str, self.bg_color))),
-                           ("image", self.bg_image_path), ("similarity", self.bg_similarity.value()),
-                           ("smoothness", self.bg_smoothness.value()), ("spill", self.bg_spill.value()),
-                           ("blur", self.bg_blur.value())):
-            self.settings.setValue(f"background/{key}", value)
-        if mode == "off":
-            self.view.set_processed(None)
-        self.update_background_status()
-
-    def background_fill_selected(self, fill: str) -> None:
-        if fill == "image" and not self.bg_image_path:
-            self.choose_background_image()
-        self.apply_background()
-
-    def choose_background_color(self) -> None:
-        b, g, r = self.bg_color
-        color = QColorDialog.getColor(QColor(r, g, b), self, "Background color")
-        if color.isValid():
-            self.bg_color = (color.blue(), color.green(), color.red())
-            self.bg_fill.set_current("color")
-            self.apply_background()
-
-    def choose_background_image(self) -> None:
-        start = str(Path(self.bg_image_path).parent if self.bg_image_path else Path.home() / "Pictures")
-        path, _ = QFileDialog.getOpenFileName(self, "Background image", start,
-                                              "Images (*.png *.jpg *.jpeg *.webp *.bmp)")
-        if path:
-            self.bg_image_path = path
-            self.bg_fill.set_current("image")
-            self.apply_background()
-        elif not self.bg_image_path:
-            self.bg_fill.set_current("gradient")
-
-    def update_background_status(self) -> None:
-        mode = self.bg_mode.current() or "off"
-        name = Path(self.bg_image_path).name if self.bg_image_path else "no image chosen"
-        self.bg_image_label.setText(f"Image: {name}" if self.bg_fill.current() == "image" else "")
-        self.bg_blur.setVisible(self.bg_fill.current() == "blur")
-        green = self.processor.key is not None
-        if mode == "off":
-            text = ""
-        elif mode in ("auto", "chroma") and green:
-            text = "🟢 Green screen detected – keying it"
-        elif mode in ("auto", "ai") and not matting_available():
-            text = "AI cutout needs onnxruntime: pip install 'pixydeck[ai]'"
-        elif mode in ("auto", "ai"):
-            text = "🧠 AI cutout active" + (" – no green screen in view" if mode == "auto" else "")
-        else:
-            text = "Waiting for a green screen in the picture…"
-        if mode != "off" and not self.digital_zoom_allowed():
-            text = "Only in the preview and the processed virtual camera"
-        self.bg_status.setText(text)
-
-    def on_green_screen(self, key) -> None:
-        if key is None and self.bg_mode.current() == "chroma":
-            self.view.set_processed(None)
-        self.notify("Green screen detected" if key is not None else "Green screen no longer in view")
-        self.update_background_status()
-
-    def on_processed_preview(self) -> None:
-        image = self.processor.take_preview()
-        processed = self.processor.background_active or self.processor.stabilizing
-        if processed and self.digital_zoom_allowed():
-            self.view.set_processed(image)
-        else:
-            self.view.set_processed(None)
 
     # ------------------------------------------------------------------
     # Auto-framing
@@ -1598,205 +978,6 @@ class PixyGUI(QMainWindow):
         wants = self.autoframe.isChecked() or self.show_faces.isChecked()
         self.processor.set_detection(self.digital_zoom_allowed() and wants)
 
-    # ------------------------------------------------------------------
-    # Privacy timer
-    # ------------------------------------------------------------------
-
-    def own_pids(self) -> list[int]:
-        pids = [os.getpid()]
-        if self.virtual_process is not None and self.virtual_process.processId():
-            pids.append(self.virtual_process.processId())
-        if self.processor.output_pid:
-            pids.append(self.processor.output_pid)
-        return pids
-
-    def check_privacy(self) -> None:
-        devices = pixy_video_nodes()
-        if devices:
-            self.worker.submit(camera_users, devices, self.own_pids(), key="users", done=self.on_camera_users)
-
-    def on_camera_users(self, users: list[tuple[int, str]]) -> None:
-        if users:
-            self.pill_users.setText("In use: " + ", ".join(sorted({name for _pid, name in users})))
-            set_state(self.pill_users, "ok")
-        self.pill_users.setVisible(bool(users))
-
-        if users and self.tracking_mode == "privacy" and self.privacy_wake.isChecked():
-            self.set_tracking_mode(self.mode_before_privacy if self.mode_before_privacy != "privacy" else "idle")
-            self.notify(f"Left privacy mode – {users[0][1]} is using the camera", 6000)
-
-        watching_here = self.streams_frames and self.isVisible() and not self.isMinimized()
-        enabled = self.privacy_enabled.isChecked()
-        if users or watching_here or self.tracking_mode == "privacy" or not enabled:
-            self.idle_seconds = 0
-        else:
-            self.idle_seconds += self.privacy_timer.interval() // 1000
-            if self.idle_seconds >= self.privacy_minutes.value() * 60:
-                self.set_tracking_mode("privacy", by_timer=True)
-                self.notify("Privacy mode after idle timeout", 6000)
-
-        if self.tracking_mode == "privacy":
-            status = "In privacy mode" + (" (idle timer)" if self.privacy_by_timer else "")
-        elif not enabled:
-            status = ""
-        elif users:
-            status = "Camera in use – timer paused"
-        elif watching_here:
-            status = "Preview visible – timer paused (release or minimise to start it)"
-        else:
-            remaining = max(0, self.privacy_minutes.value() * 60 - self.idle_seconds)
-            status = f"Privacy in {remaining // 60}:{remaining % 60:02d}"
-        self.privacy_status.setText(status)
-
-    # ------------------------------------------------------------------
-    # Virtual camera
-    # ------------------------------------------------------------------
-
-    def virtual_mode_changed(self, mode: str) -> None:
-        self.settings.setValue("virtual/mode", mode)
-        self.update_virtual_mode_ui()
-        self.refresh_virtual_device()
-
-    def update_virtual_mode_ui(self) -> None:
-        processed = self.virtual_mode.current() == VIRTUAL_PROCESSED
-        if processed and not vision_available():
-            hint = "Processed mode needs the optional AI extra (OpenCV)."
-        elif processed:
-            hint = ("Keeps the preview running and sends exactly what you see – digital zoom "
-                    "and auto-framing included.")
-        else:
-            hint = "Lowest CPU use: FFmpeg forwards the camera unchanged. Hardware zoom only."
-        self.virtual_mode_hint.setText(hint)
-        self.output_size_row.setVisible(processed)
-        self.fps_row.setVisible(not processed)
-        self.virtual_mode.setEnabled(not self.virtual_running)
-
-    def refresh_virtual_device(self) -> None:
-        device = find_virtual_camera_device()
-        running = self.virtual_running
-        if device:
-            self.virtual_device_status.setText(f"Device: ready – {device}")
-        else:
-            self.virtual_device_status.setText("Device: missing – open ⚙ Setup to create it")
-        processed_ok = self.virtual_mode.current() != VIRTUAL_PROCESSED or vision_available()
-        self.virtual_start.setEnabled(bool(device) and bool(FFMPEG) and not running and processed_ok)
-
-    def start_virtual_camera(self) -> None:
-        if self.virtual_running:
-            return
-        virtual_device = find_virtual_camera_device()
-        if virtual_device is None or not FFMPEG:
-            self.notify("Virtual camera device or FFmpeg missing", 6000)
-            return
-        self.mode_before_virtual = self.mode
-        if self.virtual_mode.current() == VIRTUAL_PROCESSED:
-            self.start_processed_virtual(virtual_device)
-        else:
-            self.start_direct_virtual(virtual_device)
-
-    def start_processed_virtual(self, virtual_device: str) -> None:
-        out_w, out_h = (int(x) for x in str(self.output_size.currentData()).split("x"))
-        src_w, src_h = self.selected_resolution()
-        if out_w > src_w:
-            out_w, out_h = src_w - src_w % 2, src_h - src_h % 2
-        if self.mode == RELEASED:
-            self.start_camera()
-        try:
-            self.processor.start_output(FFMPEG, virtual_device, out_w, out_h, self.stream_fps())
-        except OSError as exc:
-            self.notify(f"Virtual camera error: {exc}", 8000)
-            return
-        self.mode = VIRTUAL_PROCESSED
-        self.virtual_status.setText(f"Pipeline: processed – {out_w} × {out_h}")
-        self.on_virtual_started()
-
-    def start_direct_virtual(self, virtual_device: str) -> None:
-        physical = self.controller.video_device()
-        if physical is None:
-            self.notify("EMEET PIXY capture device not found", 6000)
-            return
-        resolution = str(self.resolution.currentData() or "1280x720")
-        fps = int(self.fps.currentData() or 30)
-        self.stop_camera()
-        self.mode = VIRTUAL_DIRECT
-        self.show_info(
-            "🎥", "Virtual camera active",
-            f"The PIXY feeds “{VIRTUAL_CAMERA_NAME}” directly ({resolution.replace('x', ' × ')} @ {fps} fps).\n"
-            "Select it in Meet, OBS or Teams. Camera controls remain active.")
-        process = QProcess(self)
-        process.setProgram(FFMPEG)
-        process.setArguments([
-            "-hide_banner", "-loglevel", "warning",
-            "-f", "v4l2", "-input_format", "mjpeg", "-video_size", resolution, "-framerate", str(fps),
-            "-i", physical,
-            "-vf", "format=yuv420p", "-f", "v4l2", virtual_device,
-        ])
-        process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
-        process.finished.connect(self.virtual_process_finished)
-        process.errorOccurred.connect(self.virtual_process_error)
-        self.virtual_process = process
-        # Give Qt a moment to fully release the physical device.
-        QTimer.singleShot(350, process.start)
-        self.virtual_status.setText(f"Pipeline: direct – {resolution.replace('x', ' × ')} @ {fps} fps")
-        self.on_virtual_started()
-
-    def on_virtual_started(self) -> None:
-        self.pill_virtual.setText("Virtual cam on")
-        set_state(self.pill_virtual, "on")
-        self.virtual_start.setEnabled(False)
-        self.virtual_stop.setEnabled(True)
-        self.update_virtual_mode_ui()
-        self.update_mode_ui()
-        self.notify(f"{VIRTUAL_CAMERA_NAME} running")
-
-    def stop_virtual_camera(self, restore: bool = True) -> None:
-        self.virtual_stopping = True
-        self.processor.stop_output()
-        process, self.virtual_process = self.virtual_process, None
-        if process is not None:
-            if process.state() != QProcess.ProcessState.NotRunning:
-                process.terminate()
-                if not process.waitForFinished(2000):
-                    process.kill()
-                    process.waitForFinished(1000)
-            process.deleteLater()
-        self.virtual_stopping = False
-        was_direct = self.mode == VIRTUAL_DIRECT
-        self.mode = PREVIEW
-        self.output_fps = 0.0
-        self.virtual_status.setText("Pipeline: stopped")
-        self.pill_virtual.setText("Virtual cam off")
-        set_state(self.pill_virtual, "")
-        self.virtual_stop.setEnabled(False)
-        if restore:
-            if self.mode_before_virtual == RELEASED:
-                self.toggle_release()  # PREVIEW -> RELEASED, stops our stream
-            elif was_direct:
-                QTimer.singleShot(300, lambda: (self.start_camera(), self.update_mode_ui()))
-        self.update_virtual_mode_ui()
-        self.refresh_virtual_device()
-        self.update_mode_ui()
-
-    def virtual_process_finished(self, exit_code, _status) -> None:
-        if self.virtual_stopping or self.mode != VIRTUAL_DIRECT or self.virtual_process is None:
-            return
-        output = bytes(self.virtual_process.readAll()).decode(errors="replace").strip()
-        self.notify(f"Virtual camera stopped ({exit_code}) {output[-160:]}", 10000)
-        self.stop_virtual_camera(True)
-
-    def virtual_process_error(self, error) -> None:
-        if error == QProcess.ProcessError.FailedToStart and self.mode == VIRTUAL_DIRECT:
-            self.notify("FFmpeg failed to start", 8000)
-            self.stop_virtual_camera(True)
-
-    def on_processed_output_error(self, message: str) -> None:
-        self.notify(f"Virtual camera stopped: {message[-160:]}", 10000)
-        if self.mode == VIRTUAL_PROCESSED:
-            self.stop_virtual_camera(True)
-
-    def on_output_fps(self, fps: float) -> None:
-        self.output_fps = fps
-        self.update_hud()
 
     # ------------------------------------------------------------------
     # Snapshot

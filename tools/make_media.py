@@ -35,9 +35,10 @@ from PySide6.QtGui import QColor, QImage, QLinearGradient, QPainter, QPainterPat
 from PySide6.QtMultimedia import QVideoFrame  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from pixydeck import gui, setup  # noqa: E402
+from pixydeck import gui, privacy, setup, virtual_camera  # noqa: E402
 from pixydeck.background import Background  # noqa: E402
 from pixydeck.vision import Crop, Smoother, framing_target  # noqa: E402
+from pixydeck.widgets import set_state  # noqa: E402
 
 W, H = 1920, 1080
 WINDOW = (1440, 880)
@@ -202,9 +203,9 @@ def demo_checks(all_ok: bool = False) -> list:
 
 def make_window():
     gui.PixyController = FakeController
-    gui.camera_users = lambda *_args, **_kwargs: []
-    gui.pixy_video_nodes = lambda: []
-    gui.find_virtual_camera_device = lambda: "/dev/video20"
+    privacy.camera_users = lambda *_args, **_kwargs: []
+    privacy.pixy_video_nodes = lambda: []
+    virtual_camera.find_virtual_camera_device = lambda: "/dev/video20"
     gui.run_checks = lambda: demo_checks(all_ok=True)
     setup.run_checks = demo_checks
 
@@ -291,14 +292,14 @@ def screenshots(window, out: Path) -> None:
 
     window.tabs.setCurrentIndex(4)
     window.pill_virtual.setText("Virtual cam on")
-    gui.set_state(window.pill_virtual, "on")
+    set_state(window.pill_virtual, "on")
     window.virtual_status.setText("Pipeline: processed – 1920 × 1080")
     window.virtual_device_status.setText("Device: ready – /dev/video20")
     window.virtual_start.setEnabled(False)
     window.virtual_stop.setEnabled(True)
     grab(window, out / "output.png")
     window.pill_virtual.setText("Virtual cam off")
-    gui.set_state(window.pill_virtual, "")
+    set_state(window.pill_virtual, "")
 
     dialog = setup.SetupDialog(window)
     dialog.resize(620, 600)
