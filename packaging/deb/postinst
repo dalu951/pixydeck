@@ -1,0 +1,18 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    udevadm control --reload-rules || true
+    udevadm trigger --subsystem-match=hidraw --action=add || true
+    systemctl daemon-reload || true
+    systemctl enable pixydeck-virtual-camera.service >/dev/null 2>&1 || true
+    if ! systemctl restart pixydeck-virtual-camera.service 2>/dev/null; then
+        echo "PixyDeck: the virtual camera could not start yet (is v4l2loopback built for $(uname -r)?)."
+        echo "          Open PixyDeck -> Setup after a reboot to finish."
+    fi
+    if command -v update-desktop-database >/dev/null; then update-desktop-database -q || true; fi
+    if command -v gtk-update-icon-cache >/dev/null; then gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true; fi
+    if [ -d /usr/local/lib/pixydeck ]; then
+        echo "PixyDeck: a manual ./install.sh installation was found; remove it with ./uninstall.sh to avoid duplicates."
+    fi
+fi
+exit 0

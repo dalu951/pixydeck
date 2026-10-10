@@ -29,6 +29,7 @@ if ((${#need[@]})); then
         echo "On vanilla Arch, install the headers matching your kernel if DKMS needs them." >&2
     elif command -v apt >/dev/null 2>&1; then
         echo "Debian/Ubuntu prerequisites:" >&2
+        # shellcheck disable=SC2016  # printed for the user to run
         echo '  sudo apt install python3 python3-venv v4l-utils ffmpeg v4l2loopback-utils v4l2loopback-dkms linux-headers-$(uname -r)' >&2
     fi
     exit 1
@@ -64,7 +65,7 @@ if [[ ! -x "$VENV/bin/python" ]]; then
     python3 -m venv "$VENV"
 fi
 
-if ! "$VENV/bin/python" -m pip install --upgrade "$ROOT[ai]"; then
+if ! "$VENV/bin/python" -m pip install --upgrade "${ROOT}[ai]"; then
     echo "AI extra (OpenCV/ONNX Runtime) could not be installed; continuing without AI features." >&2
     "$VENV/bin/python" -m pip install --upgrade "$ROOT"
 fi

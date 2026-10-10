@@ -23,7 +23,8 @@ Python `>=3.10`.
 
 | Package | Needed for |
 | --- | --- |
-| `PySide6>=6.8,<7` | required |
+| `PySide6-Essentials>=6.8,<7` | required |
+| `PySide6-Addons>=6.8,<7` | required |
 | `numpy>=1.24` | extra `[ai]` |
 | `opencv-python-headless>=4.8` | extra `[ai]` |
 | `onnxruntime>=1.17` | extra `[ai]` |

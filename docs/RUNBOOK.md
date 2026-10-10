@@ -5,13 +5,17 @@ How to install, upgrade, check, troubleshoot and roll back PixyDeck on a desktop
 ## What the installer puts on the system
 
 <!-- AUTO-GENERATED:installed-files -->
+Installed by `./install.sh`; the `.deb` and AUR packages use `/usr/lib/pixydeck` and `/usr/lib/{systemd,udev}` instead.
+
 | Installed item | Location |
 | --- | --- |
 | `deploy/70-pixydeck.rules` | `/etc/udev/rules.d/70-pixydeck.rules` |
 | `deploy/virtual-camera-device` | `/usr/local/lib/pixydeck/virtual-camera-device` |
-| `deploy/pixydeck-virtual-camera.service` | `/etc/systemd/system/pixydeck-virtual-camera.service` |
+| `deploy/pixydeck-setup` | `/usr/local/lib/pixydeck/pixydeck-setup` |
+| `pixydeck-virtual-camera.service` (generated from a `deploy/*.in` template) | `/etc/systemd/system/pixydeck-virtual-camera.service` |
+| `pixydeck.policy` (generated from a `deploy/*.in` template) | `/usr/share/polkit-1/actions/io.github.dalu951.pixydeck.policy` |
 | systemd unit `pixydeck-virtual-camera.service` | enabled at boot |
-| `$VENV` (private virtualenv) | `~/.local/share/pixydeck/venv` |
+| private virtualenv | `~/.local/share/pixydeck/venv` |
 | desktop entry and icon | `~/.local/share/applications/pixydeck.desktop`, hicolor icon theme |
 <!-- /AUTO-GENERATED:installed-files -->
 

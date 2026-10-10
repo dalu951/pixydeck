@@ -78,14 +78,24 @@ def dependency_reference() -> str:
 
 def installed_files() -> str:
     text = (ROOT / "install.sh").read_text()
+    variables = dict(re.findall(r"^(LIBDIR|POLICY)=(\S+)$", text, re.M))
+
+    def expand(value: str) -> str:
+        value = value.strip('"')
+        for name, replacement in variables.items():
+            value = value.replace(f"${name}", replacement)
+        return value
+
     rows = []
-    for source, target in re.findall(r'sudo install -m \d+ "\$ROOT/([^"]+)" (\S+)', text):
-        rows.append((f"`{source}`", f"`{target}`"))
+    for origin, source, target in re.findall(r'sudo install -m \d+ "\$(ROOT|TMP)/([^"]+)" (\S+)', text):
+        label = f"`{source}`" if origin == "ROOT" else f"`{source}` (generated from a `deploy/*.in` template)"
+        rows.append((label, f"`{expand(target)}`"))
     services = sorted(set(re.findall(r"sudo systemctl enable (\S+)", text)))
     rows += [(f"systemd unit `{s}`", "enabled at boot") for s in services]
-    rows.append(("`$VENV` (private virtualenv)", "`~/.local/share/pixydeck/venv`"))
+    rows.append(("private virtualenv", "`~/.local/share/pixydeck/venv`"))
     rows.append(("desktop entry and icon", "`~/.local/share/applications/pixydeck.desktop`, hicolor icon theme"))
-    return table(("Installed item", "Location"), rows)
+    return ("Installed by `./install.sh`; the `.deb` and AUR packages use `/usr/lib/pixydeck` "
+            "and `/usr/lib/{systemd,udev}` instead.\n\n" + table(("Installed item", "Location"), rows))
 
 
 GENERATORS = {

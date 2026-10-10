@@ -1,0 +1,19 @@
+# pacman hooks reload udev rules and systemd units; services are not
+# enabled automatically on Arch, so point users to the setup dialog.
+
+post_install() {
+  echo ":: EMEET PixyDeck installed."
+  echo "   Start it from the application menu and open  ⚙ Setup  to create the"
+  echo "   virtual camera (or: sudo systemctl enable --now pixydeck-virtual-camera.service)."
+  echo "   Replug the camera once if its controls are not accessible right away."
+}
+
+post_upgrade() {
+  if systemctl is-enabled --quiet pixydeck-virtual-camera.service 2>/dev/null; then
+    systemctl try-restart pixydeck-virtual-camera.service || true
+  fi
+}
+
+pre_remove() {
+  systemctl disable --now pixydeck-virtual-camera.service >/dev/null 2>&1 || true
+}

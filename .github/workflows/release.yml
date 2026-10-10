@@ -1,0 +1,62 @@
+name: Release
+
+# Push a tag like v0.3.0 to build the .deb, attach it with an updated
+# PKGBUILD to a GitHub release and (optionally) publish to the AUR.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    env:
+      # Optional: SSH key of the AUR account that maintains "pixydeck".
+      AUR_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tag matches pyproject version
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME != v$version"; exit 1; }
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Build .deb (Ubuntu 24.04 container)
+        run: packaging/deb/docker-build.sh dist
+
+      - name: Fill PKGBUILD checksum and generate .SRCINFO
+        run: |
+          curl -fsSL -o source.tar.gz "https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz"
+          sum=$(sha256sum source.tar.gz | cut -d' ' -f1)
+          mkdir -p dist/aur
+          sed -e "s/^pkgver=.*/pkgver=${VERSION}/" -e "s/^sha256sums=.*/sha256sums=('${sum}')/" \
+              packaging/aur/PKGBUILD > dist/aur/PKGBUILD
+          cp packaging/aur/pixydeck.install dist/aur/
+          docker run --rm -e HOST_ID="$(id -u):$(id -g)" -v "$PWD/dist/aur":/pkg archlinux:latest bash -c \
+            'pacman -Sy --noconfirm --needed base-devel >/dev/null && useradd -m b && chown -R b /pkg &&
+             cd /pkg && sudo -u b makepkg --printsrcinfo > .SRCINFO && chown -R "$HOST_ID" /pkg'
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "EMEET PixyDeck $VERSION" --generate-notes \
+            "dist/pixydeck_${VERSION}_amd64.deb" dist/aur/PKGBUILD dist/aur/.SRCINFO dist/aur/pixydeck.install
+
+      - name: Publish to AUR
+        if: env.AUR_KEY != ''
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$AUR_KEY" > ~/.ssh/aur && chmod 600 ~/.ssh/aur
+          ssh-keyscan -t ed25519 aur.archlinux.org >> ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o IdentitiesOnly=yes"
+          git clone ssh://aur@aur.archlinux.org/pixydeck.git aur
+          cp dist/aur/PKGBUILD dist/aur/.SRCINFO dist/aur/pixydeck.install aur/
+          cd aur
+          git config user.name "dalu951"
+          git config user.email "258783173+dalu951@users.noreply.github.com"
+          git add PKGBUILD .SRCINFO pixydeck.install
+          git commit -m "Update to ${VERSION}" && git push origin HEAD:master

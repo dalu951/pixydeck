@@ -1,0 +1,57 @@
+# Maintainer: dalu951 <https://github.com/dalu951>
+pkgname=pixydeck
+pkgver=0.3.0
+pkgrel=1
+pkgdesc="EMEET PixyDeck: Linux control suite for the EMEET PIXY webcam – PTZ, AI focus, auto-framing, AI background, virtual camera (unofficial)"
+arch=('any')
+url="https://github.com/dalu951/pixydeck"
+license=('GPL-3.0-only')
+depends=(
+  'python'
+  'pyside6'
+  'qt6-multimedia'
+  'qt6-multimedia-ffmpeg'
+  'qt6-svg'
+  'qt6-wayland'
+  'python-numpy'
+  'python-opencv'
+  'python-onnxruntime'
+  'v4l-utils'
+  'ffmpeg'
+  'v4l2loopback-utils'
+  'polkit'
+)
+optdepends=('v4l2loopback-dkms: virtual camera kernel module (not needed if your kernel ships v4l2loopback)')
+makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel')
+checkdepends=('python-pyflakes')
+install=pixydeck.install
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('0000000000000000000000000000000000000000000000000000000000000000')
+
+build() {
+  cd "$pkgname-$pkgver"
+  python -m build --wheel --no-isolation
+}
+
+check() {
+  cd "$pkgname-$pkgver"
+  python -m pyflakes src tests
+  QT_QPA_PLATFORM=offscreen PYTHONPATH=src python -m unittest discover -s tests
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  python -m installer --destdir="$pkgdir" dist/*.whl
+
+  install -Dm755 deploy/virtual-camera-device "$pkgdir/usr/lib/pixydeck/virtual-camera-device"
+  install -Dm755 deploy/pixydeck-setup "$pkgdir/usr/lib/pixydeck/pixydeck-setup"
+  install -Dm644 deploy/70-pixydeck.rules "$pkgdir/usr/lib/udev/rules.d/70-pixydeck.rules"
+  install -d "$pkgdir/usr/lib/systemd/system" "$pkgdir/usr/share/polkit-1/actions" "$pkgdir/usr/share/applications"
+  sed 's#@LIBDIR@#/usr/lib/pixydeck#g' deploy/pixydeck-virtual-camera.service.in \
+    > "$pkgdir/usr/lib/systemd/system/pixydeck-virtual-camera.service"
+  sed 's#@HELPER@#/usr/lib/pixydeck/pixydeck-setup#g' deploy/io.github.dalu951.pixydeck.policy.in \
+    > "$pkgdir/usr/share/polkit-1/actions/io.github.dalu951.pixydeck.policy"
+  sed 's#@EXEC@#pixydeck#g' deploy/pixydeck.desktop.in > "$pkgdir/usr/share/applications/pixydeck.desktop"
+  install -Dm644 assets/pixydeck.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/pixydeck.svg"
+  install -Dm644 README.md CHANGELOG.md CREDITS.md -t "$pkgdir/usr/share/doc/$pkgname/"
+}
