@@ -26,7 +26,7 @@ Settings live in `~/.config/pixydeck/pixydeck.conf`; settings of an earlier emee
 | Installed via | Upgrade |
 | --- | --- |
 | `.deb` | `sudo apt install ./pixydeck_<new>_amd64.deb` |
-| AUR | `yay -Syu` |
+| AUR / PKGBUILD | `makepkg -si` with the new release `PKGBUILD` (`yay -Syu` once it is in the AUR) |
 | `install.sh` | `git pull && ./install.sh` |
 
 The installer is idempotent: it rebuilds the private virtualenv package, reinstalls the system files, reloads udev and systemd and restarts the virtual-camera service. It replaces an existing emeet-pixy-control installation. Restart PixyDeck afterwards.
@@ -54,7 +54,7 @@ The installer is idempotent: it rebuilds the private virtualenv package, reinsta
 | Low frame rate with AI background | AI matting is ~30 ms/frame on CPU | use 1080p instead of 4K, or the green-screen mode |
 | Camera tilts into its base | old saved positions below -52° | positions are clamped automatically since 0.3.0; re-store the preset |
 
-Logs: start `~/.local/share/pixydeck/venv/bin/pixydeck` from a terminal to see Qt/FFmpeg messages; service logs via `journalctl -u pixydeck-virtual-camera.service`.
+Logs: `~/.local/state/pixydeck/pixydeck.log` (rotating, 3 × 1 MB; `PIXYDECK_DEBUG=1` for debug level) contains app, Qt and FFmpeg messages and uncaught exceptions; service logs via `journalctl -u pixydeck-virtual-camera.service`.
 
 ## Rollback
 

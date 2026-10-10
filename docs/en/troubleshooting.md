@@ -25,4 +25,4 @@ journalctl -u pixydeck-virtual-camera.service -b
 v4l2-ctl --list-devices
 ```
 
-Start `pixydeck` from a terminal to see Qt/FFmpeg messages, then [open an issue](https://github.com/dalu951/pixydeck/issues) with your distribution, kernel version and the output. More operational details are in the [runbook](../RUNBOOK.md).
+PixyDeck writes a log to `~/.local/state/pixydeck/pixydeck.log` (hover over the version number in the header to see the path); set `PIXYDECK_DEBUG=1` for more detail. Attach the log and the output above when you [open an issue](https://github.com/dalu951/pixydeck/issues), together with your distribution and kernel version. More operational details are in the [runbook](../RUNBOOK.md).

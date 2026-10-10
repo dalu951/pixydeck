@@ -40,8 +40,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --title "EMEET PixyDeck $VERSION" --generate-notes \
-            "dist/pixydeck_${VERSION}_amd64.deb" dist/aur/PKGBUILD dist/aur/.SRCINFO dist/aur/pixydeck.install
+          # GitHub renames dot-files on upload ("default.SRCINFO"); attach a clearly named copy.
+          mkdir -p dist/release
+          cp "dist/pixydeck_${VERSION}_amd64.deb" dist/aur/PKGBUILD dist/aur/pixydeck.install dist/release/
+          cp dist/aur/.SRCINFO dist/release/pixydeck.SRCINFO
+          (cd dist/release && sha256sum -- * > SHA256SUMS)
+          gh release create "$GITHUB_REF_NAME" --title "EMEET PixyDeck $VERSION" --generate-notes dist/release/*
 
       # The AUR key is only exposed to this step - never to the build steps
       # above, which run third-party package installs.

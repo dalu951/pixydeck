@@ -6,7 +6,7 @@ PixyDeck braucht Linux mit systemd, eine EMEET PIXY (USB `328f:00c0`) und – f�
 
 ## Ubuntu, Pop!_OS, Linux Mint (Basis 24.04)
 
-1. `pixydeck_<version>_amd64.deb` von der [Release-Seite](https://github.com/dalu951/pixydeck/releases) herunterladen.
+1. `pixydeck_<version>_amd64.deb` (optional auch `SHA256SUMS`, prüfen mit `sha256sum -c --ignore-missing SHA256SUMS`) von der [Release-Seite](https://github.com/dalu951/pixydeck/releases) herunterladen. Das Paket ist für die Basis **24.04** (Python 3.12) gebaut; auf anderen Versionen das Installationsskript unten nutzen.
 2. Mit apt installieren – FFmpeg, v4l-utils und `v4l2loopback-dkms` kommen automatisch mit:
 
    ```bash
@@ -19,11 +19,16 @@ Das Paket bringt seine Python-Bibliotheken (Qt, OpenCV, ONNX Runtime) in `/opt/p
 
 ## Arch Linux, CachyOS, EndeavourOS, Manjaro
 
+Bis das Paket im AUR veröffentlicht ist, wird es aus den Release-Dateien gebaut:
+
 ```bash
-yay -S pixydeck            # oder: paru -S pixydeck
+mkdir pixydeck-pkg && cd pixydeck-pkg
+curl -LO https://github.com/dalu951/pixydeck/releases/latest/download/PKGBUILD
+curl -LO https://github.com/dalu951/pixydeck/releases/latest/download/pixydeck.install
+makepkg -si
 ```
 
-Das AUR-Paket nutzt die offiziellen Arch-Pakete (`pyside6`, `python-opencv`, `python-onnxruntime`, …). Wie unter Arch üblich werden Dienste nicht automatisch aktiviert: Einmal in PixyDeck **⚙ Setup** öffnen und bei *Virtuelle Kamera* auf **Fix** klicken – oder `sudo systemctl enable --now pixydeck-virtual-camera.service` ausführen.
+Das Paket nutzt die offiziellen Arch-Pakete (`pyside6`, `python-opencv`, `python-onnxruntime`, …). Wie unter Arch üblich werden Dienste nicht automatisch aktiviert: Einmal in PixyDeck **⚙ Setup** öffnen und bei *Virtuelle Kamera* auf **Fix** klicken – oder `sudo systemctl enable --now pixydeck-virtual-camera.service` ausführen.
 
 Bringt dein Kernel kein `v4l2loopback` mit, zusätzlich `v4l2loopback-dkms` und die passenden Kernel-Header installieren.
 

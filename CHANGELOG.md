@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1 - 2026-10-10
+
+- Log file `~/.local/state/pixydeck/pixydeck.log` (rotating) with uncaught exceptions from the GUI and worker threads and Qt warnings; `PIXYDECK_DEBUG=1` for debug output
+- Version shown in the header (tooltip: log file path)
+- Release assets: `pixydeck.SRCINFO` instead of GitHub's `default.SRCINFO`, plus `SHA256SUMS`
+- Docs: Arch install via the release `PKGBUILD` until the AUR package is published; `.deb` targets the 24.04 base
+
 ## 0.3.0 - unreleased
 
 First release as **EMEET PixyDeck** (`pixydeck`), an independent project that grew out of emeet-pixy-control.

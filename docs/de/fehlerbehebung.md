@@ -25,4 +25,4 @@ journalctl -u pixydeck-virtual-camera.service -b
 v4l2-ctl --list-devices
 ```
 
-`pixydeck` im Terminal starten, um Qt-/FFmpeg-Meldungen zu sehen, und dann ein [Issue eröffnen](https://github.com/dalu951/pixydeck/issues) – mit Distribution, Kernel-Version und der Ausgabe. Weitere Details für den Betrieb stehen im [Runbook](../RUNBOOK.md) (Englisch).
+PixyDeck schreibt ein Protokoll nach `~/.local/state/pixydeck/pixydeck.log` (der Pfad erscheint, wenn man mit der Maus über die Versionsnummer in der Kopfzeile fährt); `PIXYDECK_DEBUG=1` liefert mehr Details. Beim [Issue](https://github.com/dalu951/pixydeck/issues) bitte Protokoll, die Ausgabe oben, Distribution und Kernel-Version anhängen. Weitere Details für den Betrieb stehen im [Runbook](../RUNBOOK.md) (Englisch).

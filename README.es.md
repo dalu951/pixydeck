@@ -39,7 +39,7 @@ estabilización y una cámara virtual para Meet, Zoom, Teams y OBS – en una so
 | Sistema | Comando |
 | --- | --- |
 | **Ubuntu / Pop!_OS 24.04** | descarga el `.deb` desde las [releases](https://github.com/dalu951/pixydeck/releases) y ejecuta `sudo apt install ./pixydeck_*_amd64.deb` |
-| **Arch / CachyOS / Manjaro** | `yay -S pixydeck` (AUR) |
+| **Arch / CachyOS / Manjaro** | descarga `PKGBUILD` y `pixydeck.install` de la [última release](https://github.com/dalu951/pixydeck/releases/latest) y ejecuta `makepkg -si` (paquete AUR próximamente) |
 | **Cualquier distribución** | `git clone https://github.com/dalu951/pixydeck.git && cd pixydeck && ./install.sh` |
 
 Abre **EMEET PixyDeck** desde el menú de aplicaciones; el diálogo **⚙ Setup** corrige lo que falte. Documentación detallada (en inglés): [instalación](docs/en/installation.md) · [guía](docs/en/user-guide.md) · [solución de problemas](docs/en/troubleshooting.md) · [FAQ](docs/en/faq.md).

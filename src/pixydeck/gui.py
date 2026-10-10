@@ -23,7 +23,8 @@ from PySide6.QtWidgets import (
     QSpinBox, QStackedWidget, QTabWidget, QVBoxLayout, QWidget,
 )
 
-from . import APP_ID, APP_NAME, VIRTUAL_CAMERA_NAME, backend
+from . import APP_ID, APP_NAME, VIRTUAL_CAMERA_NAME, __version__, backend
+from .diagnostics import install_qt_message_handler, log_file, setup_logging
 from .backend import PixyController, camera_users, find_video_by_name, video_nodes
 from .setup import SetupDialog, needs_attention, run_checks
 from .vision import (
@@ -282,6 +283,9 @@ class PixyGUI(QMainWindow):
         header = QHBoxLayout()
         header.addWidget(QLabel(APP_NAME, objectName="title"))
         header.addSpacing(8)
+        version = QLabel(f"v{__version__}", objectName="subtle")
+        version.setToolTip(f"Log file: {log_file()}")
+        header.addWidget(version)
         self.device_label = QLabel("Detecting camera…", objectName="subtle")
         header.addWidget(self.device_label)
         header.addStretch()
@@ -1846,7 +1850,9 @@ class PixyGUI(QMainWindow):
 
 
 def main() -> None:
+    setup_logging()
     app = QApplication(sys.argv)
+    install_qt_message_handler()
     app.setApplicationName(APP_NAME)
     app.setDesktopFileName(APP_ID)
     app.setStyle("Fusion")
