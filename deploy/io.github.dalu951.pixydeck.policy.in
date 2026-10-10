@@ -8,8 +8,8 @@
   <action id="io.github.dalu951.pixydeck.setup">
     <description>Set up the EMEET PIXY camera integration</description>
     <description xml:lang="de">EMEET-PIXY-Kameraintegration einrichten</description>
-    <message>Authentication is required to set up the PixyDeck virtual camera and camera permissions.</message>
-    <message xml:lang="de">Zum Einrichten der virtuellen PixyDeck-Kamera und der Kamera-Berechtigungen ist eine Authentifizierung erforderlich.</message>
+    <message>Authentication is required to set up the PixyDeck virtual camera and camera permissions (this can include adding you to the 'video' group).</message>
+    <message xml:lang="de">Zum Einrichten der virtuellen PixyDeck-Kamera und der Kamera-Berechtigungen ist eine Authentifizierung erforderlich (ggf. wird Ihr Konto zur Gruppe „video“ hinzugefügt).</message>
     <defaults>
       <allow_any>no</allow_any>
       <allow_inactive>no</allow_inactive>

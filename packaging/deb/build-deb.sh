@@ -82,8 +82,8 @@ PYTHONPATH="$LIB" QT_QPA_PLATFORM=offscreen "$PYTHON" -c \
 
 echo "==> Installing application files"
 install -d "$PKG/usr/bin"
-printf '#!/bin/sh\nPYTHONPATH=/opt/pixydeck/lib exec /usr/bin/python3 -m pixydeck "$@"\n' > "$PKG/usr/bin/pixydeck"
-printf '#!/bin/sh\nPYTHONPATH=/opt/pixydeck/lib exec /usr/bin/python3 -m pixydeck.backend "$@"\n' > "$PKG/usr/bin/pixydeck-cli"
+printf '#!/bin/sh\nPYTHONPATH=/opt/pixydeck/lib exec /usr/bin/python3 -P -m pixydeck "$@"\n' > "$PKG/usr/bin/pixydeck"
+printf '#!/bin/sh\nPYTHONPATH=/opt/pixydeck/lib exec /usr/bin/python3 -P -m pixydeck.backend "$@"\n' > "$PKG/usr/bin/pixydeck-cli"
 chmod 755 "$PKG/usr/bin/pixydeck" "$PKG/usr/bin/pixydeck-cli"
 install -Dm755 "$ROOT/deploy/virtual-camera-device" "$PKG/usr/lib/pixydeck/virtual-camera-device"
 install -Dm755 "$ROOT/deploy/pixydeck-setup" "$PKG/usr/lib/pixydeck/pixydeck-setup"
@@ -100,6 +100,9 @@ gzip -9cn "$ROOT/CHANGELOG.md" > "$PKG/usr/share/doc/pixydeck/changelog.gz"
 chmod 644 "$PKG/usr/share/doc/pixydeck/changelog.gz"
 
 echo "==> Writing package metadata"
+# Package modes must not depend on the builder's umask (mktemp -d is 0700).
+chmod 755 "$PKG"
+chmod -R u+rwX,go+rX,go-w "$PKG"
 install -d "$PKG/DEBIAN"
 SIZE=$(du -sk --exclude=DEBIAN "$PKG" | cut -f1)
 cat > "$PKG/DEBIAN/control" <<CONTROL

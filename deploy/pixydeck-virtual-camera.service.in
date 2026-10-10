@@ -5,9 +5,25 @@ After=systemd-modules-load.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStartPre=/sbin/modprobe v4l2loopback
+ExecStartPre=/usr/sbin/modprobe v4l2loopback
 ExecStart=@LIBDIR@/virtual-camera-device start
 ExecStop=@LIBDIR@/virtual-camera-device stop
+# Hardening: the helper only loads a module and talks to /dev/v4l2loopback.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX
+SystemCallArchitectures=native
 
 [Install]
 WantedBy=multi-user.target

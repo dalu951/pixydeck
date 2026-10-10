@@ -21,9 +21,10 @@ case "${1:-}" in
         systemctl restart "$UNIT"
         ;;
     udev)
-        # Apply the PIXY HID permission rule to the connected camera.
+        # Apply the PixyDeck rules to the camera and the virtual camera.
         udevadm control --reload-rules
         udevadm trigger --subsystem-match=hidraw --action=add
+        udevadm trigger --subsystem-match=video4linux --action=add
         ;;
     video-group)
         # Allow the calling desktop user to write to the loopback device.

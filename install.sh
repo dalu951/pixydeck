@@ -73,7 +73,9 @@ fi
 install -m 0644 "$ROOT/assets/pixydeck.svg" "$ICON_FILE"
 
 exec_path="$VENV/bin/pixydeck"
-sed "s#@EXEC@#$exec_path#g" "$ROOT/deploy/pixydeck.desktop.in" > "$DESKTOP_FILE"
+# Escape sed replacement metacharacters in case the path contains them.
+exec_escaped=$(printf '%s\n' "$exec_path" | sed 's/[#&\\]/\\&/g')
+sed "s#@EXEC@#$exec_escaped#g" "$ROOT/deploy/pixydeck.desktop.in" > "$DESKTOP_FILE"
 chmod 0644 "$DESKTOP_FILE"
 
 LIBDIR=/usr/local/lib/pixydeck
