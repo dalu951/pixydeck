@@ -21,7 +21,7 @@ ACCENT_SOFT = "rgba(91, 140, 255, 0.18)"
 
 THEME = f"""
 * {{ font-size: 10pt; }}
-QMainWindow, QWidget#root {{ background: #0f1115; color: #e6e8ee; }}
+QMainWindow, QDialog, QWidget#root {{ background: #0f1115; color: #e6e8ee; }}
 QWidget {{ color: #e6e8ee; }}
 QLabel#title {{ font-size: 15pt; font-weight: 700; letter-spacing: 0.5px; }}
 QLabel#subtle {{ color: #8b93a7; }}

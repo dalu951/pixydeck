@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from . import APP_ID, APP_NAME, VIRTUAL_CAMERA_NAME, backend
 from .backend import PixyController, camera_users, video_sort_key
+from .setup import SetupDialog, needs_attention, run_checks
 from .vision import (
     Background, Crop, FrameProcessor, Smoother, framing_target, matting_available, vision_available,
 )
@@ -270,6 +271,7 @@ class PixyGUI(QMainWindow):
 
         # Let USB/video startup settle before restoring the camera state.
         QTimer.singleShot(600, self.restore_camera_state)
+        QTimer.singleShot(1500, self.check_setup)
 
     # ------------------------------------------------------------------
     # UI construction
@@ -296,6 +298,10 @@ class PixyGUI(QMainWindow):
         self.pill_virtual = QLabel("Virtual cam off", objectName="pill")
         for pill in (self.pill_users, self.pill_tracking, self.pill_virtual):
             header.addWidget(pill)
+        self.setup_button = QPushButton("⚙ Setup")
+        self.setup_button.setToolTip("Check camera permissions and the virtual camera")
+        self.setup_button.clicked.connect(self.open_setup)
+        header.addWidget(self.setup_button)
         left.addLayout(header)
 
         preview_card = QFrame(objectName="previewCard")
@@ -924,6 +930,24 @@ class PixyGUI(QMainWindow):
         self.preview_stack.setCurrentWidget(self.view)
         self.camera.start()
         self.arm_frame_watchdog()
+
+    def check_setup(self, show_if_needed: bool = True) -> None:
+        """Flag missing system pieces; open the dialog once per new problem set."""
+        checks = run_checks()
+        problems = sorted(c.key for c in checks if not c.ok and c.required)
+        self.setup_button.setText("⚠ Setup" if problems else "⚙ Setup")
+        self.setup_button.setObjectName("danger" if problems else "")
+        self.setup_button.style().unpolish(self.setup_button)
+        self.setup_button.style().polish(self.setup_button)
+        signature = ",".join(problems)
+        if show_if_needed and needs_attention(checks) and signature != self.settings.value("setup/dismissed", ""):
+            self.settings.setValue("setup/dismissed", signature)
+            self.open_setup()
+
+    def open_setup(self) -> None:
+        SetupDialog(self).exec()
+        self.check_setup(show_if_needed=False)
+        self.refresh_virtual_device()
 
     def mark_frame(self, _frame) -> None:
         self.last_frame_at = time.monotonic()
@@ -1654,7 +1678,7 @@ class PixyGUI(QMainWindow):
         if device:
             self.virtual_device_status.setText(f"Device: ready – {device}")
         else:
-            self.virtual_device_status.setText("Device: missing – check pixydeck-virtual-camera.service")
+            self.virtual_device_status.setText("Device: missing – open ⚙ Setup to create it")
         processed_ok = self.virtual_mode.current() != VIRTUAL_PROCESSED or vision_available()
         self.virtual_start.setEnabled(bool(device) and bool(FFMPEG) and not running and processed_ok)
 

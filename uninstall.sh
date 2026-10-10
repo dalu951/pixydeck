@@ -14,6 +14,7 @@ ICON_FILE="$DATA_HOME/icons/hicolor/scalable/apps/pixydeck.svg"
 sudo systemctl disable --now pixydeck-virtual-camera.service >/dev/null 2>&1 || true
 sudo rm -f /etc/systemd/system/pixydeck-virtual-camera.service
 sudo rm -f /etc/udev/rules.d/70-pixydeck.rules
+sudo rm -f /usr/share/polkit-1/actions/io.github.dalu951.pixydeck.policy
 sudo rm -rf /usr/local/lib/pixydeck
 sudo systemctl daemon-reload
 sudo udevadm control --reload-rules

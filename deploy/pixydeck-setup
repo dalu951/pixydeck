@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Privileged setup helper for EMEET PixyDeck, run through pkexec.
+#
+# It accepts only the fixed actions below - never arbitrary commands or
+# paths - so the polkit prompt authorizes exactly what the setup dialog
+# describes.
+set -euo pipefail
+
+UNIT=pixydeck-virtual-camera.service
+
+die() { echo "pixydeck-setup: $*" >&2; exit 1; }
+
+[[ ${EUID} -eq 0 ]] || die "must run as root (via pkexec)"
+
+case "${1:-}" in
+    virtual-camera)
+        # Load the module now and make the device persistent across reboots.
+        modprobe v4l2loopback || die "the v4l2loopback kernel module is not installed for kernel $(uname -r)"
+        systemctl daemon-reload
+        systemctl enable "$UNIT" >/dev/null
+        systemctl restart "$UNIT"
+        ;;
+    udev)
+        # Apply the PIXY HID permission rule to the connected camera.
+        udevadm control --reload-rules
+        udevadm trigger --subsystem-match=hidraw --action=add
+        ;;
+    video-group)
+        # Allow the calling desktop user to write to the loopback device.
+        [[ -n ${PKEXEC_UID:-} ]] || die "PKEXEC_UID not set; run through pkexec"
+        user=$(id -nu "$PKEXEC_UID") || die "unknown user"
+        getent group video >/dev/null || die "group 'video' does not exist"
+        usermod -aG video "$user"
+        ;;
+    *)
+        die "usage: pixydeck-setup virtual-camera|udev|video-group"
+        ;;
+esac

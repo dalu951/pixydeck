@@ -6,8 +6,8 @@ After=systemd-modules-load.service
 Type=oneshot
 RemainAfterExit=yes
 ExecStartPre=/sbin/modprobe v4l2loopback
-ExecStart=/usr/local/lib/pixydeck/virtual-camera-device start
-ExecStop=/usr/local/lib/pixydeck/virtual-camera-device stop
+ExecStart=@LIBDIR@/virtual-camera-device start
+ExecStop=@LIBDIR@/virtual-camera-device stop
 
 [Install]
 WantedBy=multi-user.target

@@ -75,10 +75,19 @@ exec_path="$VENV/bin/pixydeck"
 sed "s#@EXEC@#$exec_path#g" "$ROOT/deploy/pixydeck.desktop.in" > "$DESKTOP_FILE"
 chmod 0644 "$DESKTOP_FILE"
 
+LIBDIR=/usr/local/lib/pixydeck
+POLICY=/usr/share/polkit-1/actions/io.github.dalu951.pixydeck.policy
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+sed "s#@LIBDIR@#$LIBDIR#g" "$ROOT/deploy/pixydeck-virtual-camera.service.in" > "$TMP/pixydeck-virtual-camera.service"
+sed "s#@HELPER@#$LIBDIR/pixydeck-setup#g" "$ROOT/deploy/io.github.dalu951.pixydeck.policy.in" > "$TMP/pixydeck.policy"
+
 sudo install -m 0644 "$ROOT/deploy/70-pixydeck.rules" /etc/udev/rules.d/70-pixydeck.rules
-sudo install -d -m 0755 /usr/local/lib/pixydeck
-sudo install -m 0755 "$ROOT/deploy/virtual-camera-device" /usr/local/lib/pixydeck/virtual-camera-device
-sudo install -m 0644 "$ROOT/deploy/pixydeck-virtual-camera.service" /etc/systemd/system/pixydeck-virtual-camera.service
+sudo install -d -m 0755 "$LIBDIR"
+sudo install -m 0755 "$ROOT/deploy/virtual-camera-device" "$LIBDIR/virtual-camera-device"
+sudo install -m 0755 "$ROOT/deploy/pixydeck-setup" "$LIBDIR/pixydeck-setup"
+sudo install -m 0644 "$TMP/pixydeck-virtual-camera.service" /etc/systemd/system/pixydeck-virtual-camera.service
+sudo install -m 0644 "$TMP/pixydeck.policy" "$POLICY"
 
 sudo udevadm control --reload-rules
 sudo udevadm trigger --subsystem-match=hidraw || true
