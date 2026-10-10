@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import subprocess
@@ -23,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import APP_ID, APP_NAME, VIRTUAL_CAMERA_NAME, backend
-from .backend import PixyController, camera_users, video_sort_key
+from .backend import PixyController, camera_users, find_video_by_name, video_nodes
 from .setup import SetupDialog, needs_attention, run_checks
 from .vision import (
     Background, Crop, FrameProcessor, Smoother, framing_target, matting_available, vision_available,
@@ -39,11 +40,11 @@ try:
 except ImportError:  # pragma: no cover - optional extra
     np = None
 
+log = logging.getLogger(__name__)
 PACKAGE_DIR = Path(__file__).resolve().parent
 ICON = PACKAGE_DIR / "assets" / "pixydeck.svg"
 FFMPEG = shutil.which("ffmpeg")
 PACTL = shutil.which("pactl")
-VIRTUAL_NAME = VIRTUAL_CAMERA_NAME
 
 ZOOM_MIN, HW_ZOOM_MAX, ZOOM_MAX = 100, 150, 400
 PRESET_SLOTS = 4
@@ -93,30 +94,22 @@ PREVIEW, RELEASED, VIRTUAL_DIRECT, VIRTUAL_PROCESSED = "preview", "released", "d
 
 
 def find_virtual_camera_device() -> str | None:
-    """Locate the loopback device by name instead of a fixed /dev/video number."""
-    root = Path("/sys/class/video4linux")
-    if not root.exists():
-        return None
-    for dev_dir in sorted(root.glob("video*"), key=video_sort_key):
-        try:
-            if (dev_dir / "name").read_text().strip() == VIRTUAL_NAME:
-                return f"/dev/{dev_dir.name}"
-        except OSError:
-            continue
-    return None
+    return find_video_by_name(VIRTUAL_CAMERA_NAME)
 
 
 def pixy_video_nodes() -> list[str]:
     """All physical and virtual PIXY nodes, for noticing other apps using them."""
-    nodes = []
-    for dev_dir in Path("/sys/class/video4linux").glob("video*"):
+    return [device for device, name in video_nodes() if "PIXY" in name.upper()]
+
+
+def apply_controls(controller: PixyController, values: dict[str, int]) -> None:
+    """Set picture controls, automatic modes first (the camera rejects manual
+    values while the matching auto mode is on). Unsupported ones are skipped."""
+    for name in sorted(values, key=lambda n: n not in AUTO_CONTROLS):
         try:
-            name = (dev_dir / "name").read_text().upper()
-        except OSError:
-            continue
-        if "PIXY" in name:
-            nodes.append(f"/dev/{dev_dir.name}")
-    return nodes
+            controller.set(name, values[name])
+        except (backend.PixyError, KeyError) as exc:
+            log.debug("skipping control %s: %s", name, exc)
 
 
 def migrate_settings(settings: QSettings) -> None:
@@ -750,6 +743,7 @@ class PixyGUI(QMainWindow):
         self.refresh_preset_buttons()
         self.update_virtual_mode_ui()
         mode = str(self.settings.value("background/mode", "off"))
+        # Settings shim: "always" was the green-screen mode before AI matting existed.
         self.bg_mode.set_current({"always": "chroma"}.get(mode, mode))
         self.bg_fill.set_current(str(self.settings.value("background/fill", "blur")))
         self.bg_blur.set_value_silently(self.int_setting("background/blur", 6))
@@ -796,12 +790,7 @@ class PixyGUI(QMainWindow):
 
         def restore() -> bool:
             c.move_to(pan, tilt)
-            # Auto modes first, otherwise the camera rejects manual values.
-            for name in sorted(image, key=lambda n: n not in AUTO_CONTROLS):
-                try:
-                    c.set(name, image[name])
-                except (backend.PixyError, KeyError):
-                    pass
+            apply_controls(c, image)
             c.flicker(flicker)
             c.tracking(tracking)
             c.gesture(gesture)
@@ -958,7 +947,7 @@ class PixyGUI(QMainWindow):
 
     def check_frames(self) -> None:
         """Restart the camera if the stream silently stops delivering frames."""
-        streaming = self.mode in (PREVIEW, VIRTUAL_PROCESSED) and self.camera is not None
+        streaming = self.streams_frames and self.camera is not None
         if not streaming or self.recovering or time.monotonic() - self.last_frame_at < 3.0:
             return
         self.recovering = True
@@ -967,7 +956,7 @@ class PixyGUI(QMainWindow):
 
         def restart() -> None:
             self.recovering = False
-            if self.mode in (PREVIEW, VIRTUAL_PROCESSED) and self.camera is None:
+            if self.streams_frames and self.camera is None:
                 self.start_camera()
 
         # Let Qt finish releasing the device before reopening it.
@@ -1007,7 +996,7 @@ class PixyGUI(QMainWindow):
         self.update_mode_ui()
 
     def update_mode_ui(self) -> None:
-        streaming_here = self.mode in (PREVIEW, VIRTUAL_PROCESSED)
+        streaming_here = self.streams_frames
         self.release_button.setText("Resume preview" if self.mode == RELEASED else "Release camera")
         self.release_button.setEnabled(self.mode in (PREVIEW, RELEASED))
         self.resolution.setEnabled(self.mode == PREVIEW)
@@ -1022,7 +1011,7 @@ class PixyGUI(QMainWindow):
         self.apply_zoom()
 
     def update_hud(self) -> None:
-        if self.mode not in (PREVIEW, VIRTUAL_PROCESSED):
+        if not self.streams_frames:
             return
         live = self.camera is not None and self.camera.isActive()
         w, h = self.selected_resolution()
@@ -1100,8 +1089,17 @@ class PixyGUI(QMainWindow):
         width, _ = self.selected_resolution()
         return width < 1920 or (width == 1920 and self.stream_fps() <= 30)
 
-    def digital_zoom_allowed(self) -> bool:
+    @property
+    def streams_frames(self) -> bool:
+        """True while PixyDeck itself receives the camera stream."""
         return self.mode in (PREVIEW, VIRTUAL_PROCESSED)
+
+    @property
+    def virtual_running(self) -> bool:
+        return self.mode in (VIRTUAL_DIRECT, VIRTUAL_PROCESSED)
+
+    def digital_zoom_allowed(self) -> bool:
+        return self.streams_frames
 
     def max_zoom(self) -> int:
         if self.digital_zoom_allowed():
@@ -1438,7 +1436,8 @@ class PixyGUI(QMainWindow):
                     continue
                 try:
                     info["value"] = self.controller.get(name)
-                except backend.PixyError:
+                except backend.PixyError as exc:
+                    log.debug("cannot read %s: %s", name, exc)
                     continue
                 result[name] = info
             return result
@@ -1476,11 +1475,7 @@ class PixyGUI(QMainWindow):
         self.settings.remove("image")
 
         def reset() -> bool:
-            for name in sorted(defaults, key=lambda n: n not in AUTO_CONTROLS):
-                try:
-                    self.controller.set(name, defaults[name])
-                except backend.PixyError:
-                    pass
+            apply_controls(self.controller, defaults)
             return True
 
         def done(_result) -> None:
@@ -1626,7 +1621,7 @@ class PixyGUI(QMainWindow):
             self.set_tracking_mode(self.mode_before_privacy if self.mode_before_privacy != "privacy" else "idle")
             self.notify(f"Left privacy mode – {users[0][1]} is using the camera", 6000)
 
-        watching_here = self.mode in (PREVIEW, VIRTUAL_PROCESSED) and self.isVisible() and not self.isMinimized()
+        watching_here = self.streams_frames and self.isVisible() and not self.isMinimized()
         enabled = self.privacy_enabled.isChecked()
         if users or watching_here or self.tracking_mode == "privacy" or not enabled:
             self.idle_seconds = 0
@@ -1670,11 +1665,11 @@ class PixyGUI(QMainWindow):
         self.virtual_mode_hint.setText(hint)
         self.output_size_row.setVisible(processed)
         self.fps_row.setVisible(not processed)
-        self.virtual_mode.setEnabled(self.mode not in (VIRTUAL_DIRECT, VIRTUAL_PROCESSED))
+        self.virtual_mode.setEnabled(not self.virtual_running)
 
     def refresh_virtual_device(self) -> None:
         device = find_virtual_camera_device()
-        running = self.mode in (VIRTUAL_DIRECT, VIRTUAL_PROCESSED)
+        running = self.virtual_running
         if device:
             self.virtual_device_status.setText(f"Device: ready – {device}")
         else:
@@ -1683,7 +1678,7 @@ class PixyGUI(QMainWindow):
         self.virtual_start.setEnabled(bool(device) and bool(FFMPEG) and not running and processed_ok)
 
     def start_virtual_camera(self) -> None:
-        if self.mode in (VIRTUAL_DIRECT, VIRTUAL_PROCESSED):
+        if self.virtual_running:
             return
         virtual_device = find_virtual_camera_device()
         if virtual_device is None or not FFMPEG:
@@ -1722,7 +1717,7 @@ class PixyGUI(QMainWindow):
         self.mode = VIRTUAL_DIRECT
         self.show_info(
             "🎥", "Virtual camera active",
-            f"The PIXY feeds “{VIRTUAL_NAME}” directly ({resolution.replace('x', ' × ')} @ {fps} fps).\n"
+            f"The PIXY feeds “{VIRTUAL_CAMERA_NAME}” directly ({resolution.replace('x', ' × ')} @ {fps} fps).\n"
             "Select it in Meet, OBS or Teams. Camera controls remain active.")
         process = QProcess(self)
         process.setProgram(FFMPEG)
@@ -1748,7 +1743,7 @@ class PixyGUI(QMainWindow):
         self.virtual_stop.setEnabled(True)
         self.update_virtual_mode_ui()
         self.update_mode_ui()
-        self.notify(f"{VIRTUAL_NAME} running")
+        self.notify(f"{VIRTUAL_CAMERA_NAME} running")
 
     def stop_virtual_camera(self, restore: bool = True) -> None:
         self.virtual_stopping = True
@@ -1804,7 +1799,7 @@ class PixyGUI(QMainWindow):
     # ------------------------------------------------------------------
 
     def save_snapshot(self) -> None:
-        if self.mode not in (PREVIEW, VIRTUAL_PROCESSED):
+        if not self.streams_frames:
             return
         if self.view.processed.isVisible():
             image = self.view.processed.pixmap().toImage()
@@ -1838,7 +1833,7 @@ class PixyGUI(QMainWindow):
         self.save_position()
         self.settings.setValue("window/geometry", self.saveGeometry())
         self.settings.sync()
-        if self.mode in (VIRTUAL_DIRECT, VIRTUAL_PROCESSED):
+        if self.virtual_running:
             self.stop_virtual_camera(False)
         if self.mic_muted_by_us:
             set_pixy_microphone_muted(False)

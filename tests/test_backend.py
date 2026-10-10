@@ -35,6 +35,41 @@ class BackendHelpersTest(unittest.TestCase):
         first = send.call_args_list[0].args[1]
         self.assertEqual(first, [0x09, 0x04, 0x00, 0x01, 0x00, 0x05, 0x00, 0x05, 0x02, 0x5F, 0x26, 0x7F, 0x7F])
 
+    def test_cli_tracking_uses_mode_table(self):
+        with mock.patch.object(backend, "find_hidraw_device", return_value="/dev/hidrawX"), \
+                mock.patch.object(backend, "set_tracking") as set_tracking:
+            for command, mode in backend.TRACKING_MODES.items():
+                backend.execute(command)
+                self.assertEqual(set_tracking.call_args.args, ("/dev/hidrawX", mode))
+
+    def test_cli_rejects_unknown_audio_mode(self):
+        with mock.patch.object(backend, "find_hidraw_device", return_value="/dev/hidrawX"), \
+                mock.patch.object(backend, "send_hid_report") as send:
+            with self.assertRaises(backend.PixyError):
+                backend.execute("audio", "loud")
+            send.assert_not_called()
+
+    def test_cli_pan_is_clamped(self):
+        with mock.patch.object(backend, "find_video_device", return_value="/dev/videoX"), \
+                mock.patch.object(backend, "set_control") as set_control:
+            backend.execute("tilt", "-90")
+        self.assertEqual(set_control.call_args.args, ("/dev/videoX", "tilt_absolute", backend.TILT_MIN))
+
+    def test_cli_commands_match_parser(self):
+        parser_choices = backend.build_parser()._actions[1].choices
+        self.assertEqual(list(parser_choices), list(backend.CLI_COMMANDS))
+
+    def test_find_video_by_name_uses_sysfs(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for index, name in ((10, "PixyDeck Virtual Camera"), (2, "EMEET PIXY: EMEET PIXY"), (21, "PixyDeck Virtual Camera")):
+                (root / f"video{index}").mkdir()
+                (root / f"video{index}" / "name").write_text(name + "\n")
+            self.assertEqual(backend.find_video_by_name("PixyDeck Virtual Camera", root), "/dev/video10")
+            self.assertIsNone(backend.find_video_by_name("Other", root))
+            self.assertEqual([d for d, _ in backend.video_nodes(root)], ["/dev/video2", "/dev/video10", "/dev/video21"])
+
     def test_hid_report_rejects_oversize(self):
         with self.assertRaises(Exception):
             build_hid_report(range(33))

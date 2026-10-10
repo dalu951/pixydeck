@@ -84,11 +84,7 @@ def clamp(value: int, minimum: int, maximum: int) -> int:
     return max(minimum, min(value, maximum))
 
 
-def _video_candidates() -> Iterable[Path]:
-    root = Path("/sys/class/video4linux")
-    if not root.exists():
-        return []
-    return sorted(root.glob("video*"), key=video_sort_key)
+VIDEO_SYSFS = Path("/sys/class/video4linux")
 
 
 def video_sort_key(path: Path) -> int:
@@ -96,16 +92,28 @@ def video_sort_key(path: Path) -> int:
     return int(suffix) if suffix.isdigit() else 9999
 
 
+def video_nodes(root: Path = VIDEO_SYSFS) -> list[tuple[str, str]]:
+    """All V4L2 nodes as (``/dev/videoN``, device name), in numeric order."""
+    nodes = []
+    for dev_dir in sorted(root.glob("video*"), key=video_sort_key):
+        try:
+            nodes.append((f"/dev/{dev_dir.name}", (dev_dir / "name").read_text().strip()))
+        except OSError:
+            continue  # node vanished while scanning (unplug)
+    return nodes
+
+
+def find_video_by_name(name: str, root: Path = VIDEO_SYSFS) -> str | None:
+    """Locate a node by its exact name instead of a fixed /dev/video number."""
+    return next((device for device, node_name in video_nodes(root) if node_name == name), None)
+
+
 def find_video_device() -> str | None:
     """Return the physical PIXY video node that exposes PTZ controls."""
-    for dev_dir in _video_candidates():
-        try:
-            name = (dev_dir / "name").read_text().strip().upper()
-        except OSError:
-            continue
+    for device, name in video_nodes():
+        name = name.upper()
         if "EMEET" not in name or "PIXY" not in name or "VIRTUAL" in name:
             continue
-        device = f"/dev/{dev_dir.name}"
         # Only the capture node answers PTZ control ioctls; the metadata
         # node returns ENOTTY.
         try:
@@ -313,7 +321,9 @@ def set_auto_privacy(device: str, seconds: int) -> None:
     time.sleep(0.2)
     send_hid_report(device, [0x09, 0x02, 0x01, 0x01])
 
-
+TRACKING_MODES = {"idle": 0x00, "track": 0x01, "privacy": 0x02}
+AUDIO_MODES = {"nc": 0x01, "live": 0x02, "org": 0x03}
+FLICKER_MODES = {"off": 0, "50": 1, "60": 2}
 # Focus/metering: where the PIXY's AI lens points the autofocus.
 FOCUS_MODES = {"center": 0x00, "face": 0x01, "area": 0x02}
 FEATURES = {"hflip": 0x01, "vflip": 0x02, "autorotate": 0x04}
@@ -519,9 +529,6 @@ class PixyController:
     def audio(self, mode: str) -> None:
         set_audio_mode(self.hid_device(), AUDIO_MODES[mode])
 
-    def auto_privacy(self, seconds: int) -> None:
-        set_auto_privacy(self.hid_device(), seconds)
-
     def flicker(self, mode: str) -> None:
         self.set("power_line_frequency", FLICKER_MODES[mode])
 
@@ -536,10 +543,6 @@ class PixyController:
     def state(self) -> dict:
         return read_state(self.hid_device())
 
-
-TRACKING_MODES = {"idle": 0x00, "track": 0x01, "privacy": 0x02}
-AUDIO_MODES = {"nc": 0x01, "live": 0x02, "org": 0x03}
-FLICKER_MODES = {"off": 0, "50": 1, "60": 2}
 
 
 def execute(command: str, value: str | None = None) -> str:
@@ -560,15 +563,10 @@ def execute(command: str, value: str | None = None) -> str:
     if command in hid_commands and not hid:
         raise PixyError("EMEET PIXY HID device not found")
 
-    if command == "idle":
-        set_tracking(hid, 0x00)
-        return "Tracking OFF (idle)"
-    if command == "track":
-        set_tracking(hid, 0x01)
-        return "Tracking ON"
-    if command == "privacy":
-        set_tracking(hid, 0x02)
-        return "Privacy mode ON"
+    tracking_messages = {"idle": "Tracking OFF (idle)", "track": "Tracking ON", "privacy": "Privacy mode ON"}
+    if command in tracking_messages:
+        set_tracking(hid, TRACKING_MODES[command])
+        return tracking_messages[command]
     if command == "gesture-on":
         set_gesture(hid, True)
         return "Gesture control ON"
@@ -576,8 +574,8 @@ def execute(command: str, value: str | None = None) -> str:
         set_gesture(hid, False)
         return "Gesture control OFF"
     if command == "audio":
-        if value not in {"nc", "live", "org"}:
-            raise PixyError("Usage: audio nc|live|org")
+        if value not in AUDIO_MODES:
+            raise PixyError("Usage: audio " + "|".join(AUDIO_MODES))
         set_audio_mode(hid, AUDIO_MODES[value])
         return f"Audio: {value.upper()} mode"
     if command == "auto-privacy":
@@ -585,8 +583,8 @@ def execute(command: str, value: str | None = None) -> str:
         set_auto_privacy(hid, seconds)
         return "Auto-privacy OFF" if seconds == 0 else f"Auto-privacy ON ({seconds}s)"
     if command == "flicker":
-        if value not in {"off", "50", "60"}:
-            raise PixyError("Usage: flicker off|50|60")
+        if value not in FLICKER_MODES:
+            raise PixyError("Usage: flicker " + "|".join(FLICKER_MODES))
         set_control(video, "power_line_frequency", FLICKER_MODES[value])
         return f"Anti-flicker: {value}"
     if command == "left":

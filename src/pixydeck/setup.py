@@ -68,13 +68,7 @@ def camera_connected() -> bool:
 
 
 def virtual_camera_device() -> str | None:
-    for dev_dir in Path("/sys/class/video4linux").glob("video*"):
-        try:
-            if (dev_dir / "name").read_text().strip() == VIRTUAL_CAMERA_NAME:
-                return f"/dev/{dev_dir.name}"
-        except OSError:
-            continue
-    return None
+    return backend.find_video_by_name(VIRTUAL_CAMERA_NAME)
 
 
 def loopback_module_available() -> bool:

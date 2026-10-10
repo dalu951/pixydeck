@@ -159,7 +159,7 @@ def blurred(image: np.ndarray, strength: float) -> np.ndarray:
 class Background:
     """Settings for one keying pass; replaced (not mutated) by the GUI."""
 
-    mode: str = "off"            # off | auto | chroma | ai
+    mode: str = "off"            # off | auto | chroma ("Green screen" in the UI) | ai
     fill: str = "blur"           # blur | gradient | color | image
     color: tuple[int, int, int] = (40, 40, 40)   # BGR
     image_path: str = ""
@@ -181,7 +181,7 @@ class Background:
     def active(self) -> bool:
         if self.mode == "off":
             return False
-        return self.key is not None and self.mode in ("auto", "chroma") or self.uses_matting
+        return (self.key is not None and self.mode in ("auto", "chroma")) or self.uses_matting
 
     def backdrop(self, width: int, height: int) -> np.ndarray:
         with self._lock:
