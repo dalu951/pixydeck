@@ -36,9 +36,10 @@ def table(header: tuple[str, ...], rows: list[tuple[str, ...]]) -> str:
 
 
 def cli_reference() -> str:
-    rows = [(f"`pixydeck-cli {name}{' ' + value if value else ''}`", description)
+    rows = [(f"`pixydeck-cli {name}{' ' + value if value else ''}`".replace("|", "\\|"), description)
             for name, (value, description) in CLI_COMMANDS.items()]
-    return ("Installed at `~/.local/share/pixydeck/venv/bin/pixydeck-cli`.\n\n"
+    return ("`pixydeck-cli` is on your `PATH` with the .deb and AUR packages; after `./install.sh` "
+            "it is `~/.local/share/pixydeck/venv/bin/pixydeck-cli`.\n\n"
             + table(("Command", "Description"), rows))
 
 
@@ -105,7 +106,7 @@ GENERATORS = {
     "dependencies": dependency_reference,
     "installed-files": installed_files,
 }
-DOCUMENTS = ["README.md", "docs/CONTRIBUTING.md", "docs/RUNBOOK.md"]
+DOCUMENTS = ["docs/en/user-guide.md", "docs/de/benutzerhandbuch.md", "docs/CONTRIBUTING.md", "docs/RUNBOOK.md"]
 MARKER = re.compile(
     r"(?P<open><!-- AUTO-GENERATED:(?P<name>[\w-]+) -->).*?(?P<close><!-- /AUTO-GENERATED:(?P=name) -->)", re.S)
 

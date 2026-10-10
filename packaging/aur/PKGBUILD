@@ -52,6 +52,6 @@ package() {
   sed 's#@HELPER@#/usr/lib/pixydeck/pixydeck-setup#g' deploy/io.github.dalu951.pixydeck.policy.in \
     > "$pkgdir/usr/share/polkit-1/actions/io.github.dalu951.pixydeck.policy"
   sed 's#@EXEC@#pixydeck#g' deploy/pixydeck.desktop.in > "$pkgdir/usr/share/applications/pixydeck.desktop"
-  install -Dm644 assets/pixydeck.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/pixydeck.svg"
+  install -Dm644 src/pixydeck/assets/pixydeck.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/pixydeck.svg"
   install -Dm644 README.md CHANGELOG.md CREDITS.md -t "$pkgdir/usr/share/doc/$pkgname/"
 }

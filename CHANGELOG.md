@@ -7,6 +7,12 @@ First release as **EMEET PixyDeck** (`pixydeck`), an independent project that gr
 - Renamed package, commands (`pixydeck`, `pixydeck-cli`), service, udev rule and desktop entry
 - Virtual camera is now called *PixyDeck Virtual Camera*
 - Installer replaces an existing emeet-pixy-control install; settings are migrated on first start
+- Setup dialog: checks camera access, v4l2loopback, the virtual camera, permissions, FFmpeg and AI extras; one-click fixes through a polkit-authorized helper with fixed actions
+- `.deb` (Ubuntu/Pop!_OS 24.04, bundled deps, ~136 MB) and AUR packages; tag-driven release workflow
+- Security: AUR key scoped to the publish step, pinned host key and action SHAs, sandboxed systemd unit, udev access to the virtual camera instead of the `video` group
+- Performance: AI background 12.5 → 27 fps at 1080p, GUI thread no longer blocked, cheaper camera-user scan
+- Fix: preview froze after some resolution changes (frame watchdog restarts stalled streams)
+- Docs: README in English, German, French and Spanish; user guide, installation, troubleshooting and FAQ in English and German; synthetic screenshots and GIFs (`tools/make_media.py`)
 - docs/CONTRIBUTING.md and docs/RUNBOOK.md; CLI, shortcut, command and install tables generated from code (`tools/gen_docs.py`, checked in CI)
 
 ## 0.2.0 - unreleased (emeet-pixy-control fork)

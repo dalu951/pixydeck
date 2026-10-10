@@ -23,10 +23,11 @@ Settings live in `~/.config/pixydeck/pixydeck.conf`; settings of an earlier emee
 
 ## Install and upgrade
 
-```bash
-git pull
-./install.sh
-```
+| Installed via | Upgrade |
+| --- | --- |
+| `.deb` | `sudo apt install ./pixydeck_<new>_amd64.deb` |
+| AUR | `yay -Syu` |
+| `install.sh` | `git pull && ./install.sh` |
 
 The installer is idempotent: it rebuilds the private virtualenv package, reinstalls the system files, reloads udev and systemd and restarts the virtual-camera service. It replaces an existing emeet-pixy-control installation. Restart PixyDeck afterwards.
 

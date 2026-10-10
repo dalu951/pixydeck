@@ -70,7 +70,7 @@ if ! "$VENV/bin/python" -m pip install --upgrade "${ROOT}[ai]"; then
     "$VENV/bin/python" -m pip install --upgrade "$ROOT"
 fi
 
-install -m 0644 "$ROOT/assets/pixydeck.svg" "$ICON_FILE"
+install -m 0644 "$ROOT/src/pixydeck/assets/pixydeck.svg" "$ICON_FILE"
 
 exec_path="$VENV/bin/pixydeck"
 # Escape sed replacement metacharacters in case the path contains them.

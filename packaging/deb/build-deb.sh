@@ -94,7 +94,7 @@ sed 's#@LIBDIR@#/usr/lib/pixydeck#g' "$ROOT/deploy/pixydeck-virtual-camera.servi
 sed 's#@HELPER@#/usr/lib/pixydeck/pixydeck-setup#g' "$ROOT/deploy/io.github.dalu951.pixydeck.policy.in" \
     > "$PKG/usr/share/polkit-1/actions/io.github.dalu951.pixydeck.policy"
 sed 's#@EXEC@#pixydeck#g' "$ROOT/deploy/pixydeck.desktop.in" > "$PKG/usr/share/applications/pixydeck.desktop"
-install -Dm644 "$ROOT/assets/pixydeck.svg" "$PKG/usr/share/icons/hicolor/scalable/apps/pixydeck.svg"
+install -Dm644 "$ROOT/src/pixydeck/assets/pixydeck.svg" "$PKG/usr/share/icons/hicolor/scalable/apps/pixydeck.svg"
 install -Dm644 "$ROOT/LICENSE" "$PKG/usr/share/doc/pixydeck/copyright"
 gzip -9cn "$ROOT/CHANGELOG.md" > "$PKG/usr/share/doc/pixydeck/changelog.gz"
 chmod 644 "$PKG/usr/share/doc/pixydeck/changelog.gz"
