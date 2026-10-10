@@ -259,6 +259,11 @@ class PixyGUI(QMainWindow):
         self.device_timer = QTimer(self, interval=3000)
         self.device_timer.timeout.connect(self.refresh_virtual_device)
         self.device_timer.start()
+        self.last_frame_at = time.monotonic()
+        self.recovering = False
+        self.watchdog_timer = QTimer(self, interval=1000)
+        self.watchdog_timer.timeout.connect(self.check_frames)
+        self.watchdog_timer.start()
         self.state_timer = QTimer(self, interval=3000)
         self.state_timer.timeout.connect(self.poll_camera_state)
         self.state_timer.start()
@@ -303,6 +308,7 @@ class PixyGUI(QMainWindow):
         self.view.double_clicked.connect(self.on_preview_double_click)
         self.view.clicked.connect(self.on_preview_click)
         self.view.video.videoSink().videoFrameChanged.connect(self.on_video_frame)
+        self.view.video.videoSink().videoFrameChanged.connect(self.mark_frame)
         self.info_panel = InfoPanel()
         self.preview_stack.addWidget(self.view)
         self.preview_stack.addWidget(self.info_panel)
@@ -874,10 +880,27 @@ class PixyGUI(QMainWindow):
         self.settings.setValue("camera/resolution", str(self.resolution.currentData()))
         self.populate_fps()
         if self.mode == PREVIEW:
-            self.stop_camera()
-            self.start_camera()
+            self.switch_camera_format()
         self.hw_zoom_sent = None
         self.apply_zoom()
+
+    def switch_camera_format(self) -> None:
+        """Change resolution on the running camera.
+
+        Destroying the QCamera and opening a new one right away races with
+        Qt's deferred teardown: the new instance sometimes gets the device
+        while the old one still holds it and never receives a frame.
+        Reusing the same QCamera avoids that.
+        """
+        fmt = self.selected_format()
+        if self.camera is None or fmt is None:
+            self.stop_camera()
+            self.start_camera()
+            return
+        self.camera.stop()
+        self.camera.setCameraFormat(fmt)
+        self.camera.start()
+        self.arm_frame_watchdog()
 
     def start_camera(self) -> None:
         device = self.find_pixy_camera()
@@ -900,6 +923,31 @@ class PixyGUI(QMainWindow):
         self.camera.activeChanged.connect(lambda _active: self.update_hud())
         self.preview_stack.setCurrentWidget(self.view)
         self.camera.start()
+        self.arm_frame_watchdog()
+
+    def mark_frame(self, _frame) -> None:
+        self.last_frame_at = time.monotonic()
+
+    def arm_frame_watchdog(self) -> None:
+        """Give a (re)started camera a grace period before judging it stalled."""
+        self.last_frame_at = time.monotonic()
+
+    def check_frames(self) -> None:
+        """Restart the camera if the stream silently stops delivering frames."""
+        streaming = self.mode in (PREVIEW, VIRTUAL_PROCESSED) and self.camera is not None
+        if not streaming or self.recovering or time.monotonic() - self.last_frame_at < 3.0:
+            return
+        self.recovering = True
+        self.notify("Camera stream stalled – restarting it", 5000)
+        self.stop_camera()
+
+        def restart() -> None:
+            self.recovering = False
+            if self.mode in (PREVIEW, VIRTUAL_PROCESSED) and self.camera is None:
+                self.start_camera()
+
+        # Let Qt finish releasing the device before reopening it.
+        QTimer.singleShot(600, restart)
 
     def retry_camera(self) -> None:
         if self.camera is None and self.mode == PREVIEW:
