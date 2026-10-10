@@ -200,31 +200,27 @@ def camera_users(devices: Iterable[str], exclude_pids: Iterable[int] = ()) -> li
     processes owned by the current user are visible, which is exactly the
     set we care about.
     """
-    wanted = set()
-    for device in devices:
-        try:
-            wanted.add(os.stat(device).st_rdev)
-        except OSError:
-            pass
+    wanted = {os.path.realpath(device) for device in devices if os.path.exists(device)}
     if not wanted:
         return []
     excluded = set(exclude_pids)
+    uid = os.getuid()
     users = []
-    for proc in Path("/proc").iterdir():
-        if not proc.name.isdigit() or int(proc.name) in excluded:
-            continue
-        try:
-            fds = list((proc / "fd").iterdir())
-        except OSError:
-            continue
-        for fd in fds:
-            try:
-                if os.stat(fd).st_rdev in wanted:
-                    command = (proc / "comm").read_text().strip()
-                    users.append((int(proc.name), command))
-                    break
-            except OSError:
+    with os.scandir("/proc") as entries:
+        for proc in entries:
+            if not proc.name.isdigit() or int(proc.name) in excluded:
                 continue
+            try:
+                # Other users' fd tables are unreadable anyway; skip them early.
+                if proc.stat().st_uid != uid:
+                    continue
+                with os.scandir(f"/proc/{proc.name}/fd") as fds:
+                    # readlink is far cheaper than stat() on every descriptor.
+                    if any(os.readlink(fd.path) in wanted for fd in fds):
+                        command = Path(f"/proc/{proc.name}/comm").read_text().strip()
+                        users.append((int(proc.name), command))
+            except OSError:
+                continue  # process exited or fd closed while scanning
     return users
 
 

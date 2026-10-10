@@ -243,6 +243,10 @@ class FrameProcessor(QObject):
         self._matting = None
         self._stabilizer = Stabilizer() if cv2 is not None else None
         self._stabilize = False
+        if cv2 is not None:
+            # Parallelism comes from the render pool; nested OpenCV thread
+            # pools per worker would oversubscribe the CPU.
+            cv2.setNumThreads(RENDER_THREADS - 1)
         self._pool = ThreadPoolExecutor(RENDER_THREADS, thread_name_prefix="pixy-render")
         self._in_flight = threading.Semaphore(RENDER_THREADS)
         self._rendered: queue.Queue[Future | None] = queue.Queue()
@@ -502,7 +506,9 @@ class FrameProcessor(QObject):
                 image = background.apply(image, matte)
             image = shift_image(image, shake)
             h, w = image.shape[:2]
-            preview = QImage(image.data, w, h, image.strides[0], QImage.Format_BGR888).copy()
+            # Convert here, not in the GUI thread: RGB32 is Qt's native pixmap format.
+            bgra = cv2.cvtColor(image, cv2.COLOR_BGR2BGRA)
+            preview = QImage(bgra.data, w, h, bgra.strides[0], QImage.Format_RGB32).copy()
         else:
             # Half-resolution decoding is ~3x faster; use it whenever the crop
             # still has enough pixels for the output size.

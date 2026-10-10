@@ -456,6 +456,8 @@ class PreviewView(QGraphicsView):
         self._flash_timer.start(900)
 
     def set_hud(self, left: str, right: str) -> None:
+        if (left, right) == (self.hud_left.text(), self.hud_right.text()):
+            return  # called at up to 60 Hz while zooming; skip the relayout
         for label, text in ((self.hud_left, left), (self.hud_right, right)):
             label.setText(text)
             label.setVisible(bool(text))
@@ -477,11 +479,14 @@ class PreviewView(QGraphicsView):
         """Show a processed full frame instead of the raw video, or None to stop."""
         if image is None or image.isNull():
             self.processed.hide()
+            self.video.show()
             return
         w, _h = self.frame_size()
         self.processed.setPixmap(QPixmap.fromImage(image))
         self.processed.setScale(w / image.width())
         self.processed.show()
+        # Fully covered: don't also convert and paint every raw frame.
+        self.video.hide()
 
     def frame_size(self) -> tuple[float, float]:
         size = self.video.size()
