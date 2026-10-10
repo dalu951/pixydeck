@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=EMEET PixyDeck
+Comment=Pan, tilt, zoom, AI focus and background effects for the EMEET PIXY
+Exec=@EXEC@
+Icon=pixydeck
+Terminal=false
+Categories=AudioVideo;Video;
+StartupNotify=true

@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pixydeck"
+version = "0.3.0"
+description = "EMEET PixyDeck: unofficial Linux control suite for the EMEET PIXY webcam (PTZ, AI focus, auto-framing, background replacement, virtual camera)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "GPL-3.0-only"
+authors = [
+  {name = "dalu951"},
+  {name = "Rolf Obermaier"},  # original emeet-pixy-control
+]
+maintainers = [
+  {name = "dalu951"},
+]
+keywords = ["EMEET", "PIXY", "webcam", "Linux", "PTZ", "v4l2", "v4l2loopback"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: X11 Applications :: Qt",
+  "Intended Audience :: End Users/Desktop",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Video",
+]
+dependencies = [
+  "PySide6>=6.8,<7",
+]
+
+[project.optional-dependencies]
+# Auto-framing, face overlay and the processed virtual camera.
+ai = [
+  "numpy>=1.24",
+  "opencv-python-headless>=4.8",
+  "onnxruntime>=1.17",
+]
+
+[project.urls]
+Homepage = "https://github.com/dalu951/pixydeck"
+Issues = "https://github.com/dalu951/pixydeck/issues"
+
+[project.scripts]
+pixydeck = "pixydeck.gui:main"
+pixydeck-cli = "pixydeck.backend:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pixydeck = ["assets/*.svg", "assets/*.onnx"]

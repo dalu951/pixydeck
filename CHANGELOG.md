@@ -1,0 +1,46 @@
+# Changelog
+
+## 0.3.0 - unreleased
+
+First release as **EMEET PixyDeck** (`pixydeck`), an independent project that grew out of emeet-pixy-control.
+
+- Renamed package, commands (`pixydeck`, `pixydeck-cli`), service, udev rule and desktop entry
+- Virtual camera is now called *PixyDeck Virtual Camera*
+- Installer replaces an existing emeet-pixy-control install; settings are migrated on first start
+- docs/CONTRIBUTING.md and docs/RUNBOOK.md; CLI, shortcut, command and install tables generated from code (`tools/gen_docs.py`, checked in CI)
+
+## 0.2.0 - unreleased (emeet-pixy-control fork)
+
+- Redesigned dark UI with tabs (Camera, AI & Privacy, Image, Output), status pills and preview HUD
+- Camera commands run on a background thread via direct V4L2 ioctls (no per-click subprocesses)
+- Aiming pad, accelerating hold-to-move, arrow keys, drag/double-click on the preview
+- Unified hardware + digital zoom up to 4x; hardware zoom now also used at 1080p30
+- PTZ presets with startup position
+- Software auto-framing (YuNet face detection) and face overlay
+- Privacy timer with automatic wake when another app opens the camera; optional mic mute
+- Picture controls: colour, sharpness, gamma, gain, white balance, exposure, focus, backlight
+- Processed virtual camera (keeps preview, includes digital zoom/auto-framing); frame-rate choice for direct mode
+- Snapshot button
+- AI focus modes: center, face, click-to-focus point in the preview
+- Live sync of on-board state (gesture, microphone mode, focus, privacy, orientation)
+- Mirror / vertical flip / auto-rotate
+- Background replacement: AI person matting (Robust Video Matting) or automatically detected green screen; blur/gradient/colour/image fill
+- Software stabilization against monitor/desk shake
+- Tilt limited to -52° (lower values only park the camera)
+- Fix: virtual-camera service used /usr/bin/modprobe, which does not exist on Debian/Ubuntu
+- Fix: negative pan/tilt angles were rounded down in status output
+
+## 0.1.0 - 2026-08-24 (emeet-pixy-control by Rolf Obermaier)
+
+Initial public preview.
+
+- Native PySide6 preview/control GUI
+- Dynamic PIXY video/HID discovery
+- PTZ, center, zoom, tracking, privacy, gesture, audio and anti-flicker controls
+- Resolution selection and saved settings
+- Release Preview mode for direct use by Meet/OBS/Teams
+- FFmpeg + v4l2loopback Virtual Camera mode
+- Persistent virtual-camera systemd service
+- Targeted udev permissions for EMEET PIXY HID access
+- Responsive split layout with scrollable controls
+- Desktop launcher and project icon

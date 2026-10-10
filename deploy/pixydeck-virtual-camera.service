@@ -1,0 +1,13 @@
+[Unit]
+Description=PixyDeck virtual camera device (v4l2loopback)
+After=systemd-modules-load.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/sbin/modprobe v4l2loopback
+ExecStart=/usr/local/lib/pixydeck/virtual-camera-device start
+ExecStop=/usr/local/lib/pixydeck/virtual-camera-device stop
+
+[Install]
+WantedBy=multi-user.target
