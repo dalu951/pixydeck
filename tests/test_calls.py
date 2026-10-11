@@ -262,8 +262,12 @@ class CallsWindowTest(GuiTestCase):
 
 
 class VirtualAutostartTest(GuiTestCase):
+    def test_autostart_is_on_by_default(self):
+        self.assertTrue(self.window.virtual_autostart.isChecked())
+
     def test_autostart_starts_once(self):
         w = self.window
+        w.virtual_autostart.setChecked(False)
         w.virtual_autostart.setChecked(True)
         with mock.patch.object(w, "start_virtual_camera") as start:
             w.autostart_virtual_camera()
@@ -272,6 +276,7 @@ class VirtualAutostartTest(GuiTestCase):
 
     def test_autostart_off_or_already_running(self):
         w = self.window
+        w.virtual_autostart.setChecked(False)
         with mock.patch.object(w, "start_virtual_camera") as start:
             w.autostart_virtual_camera()
             w.virtual_autostart.setChecked(True)

@@ -496,7 +496,8 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         self.privacy_minutes.setValue(self.int_setting("privacy/minutes", 10))
         self.privacy_wake.set_silently(self.bool_setting("privacy/wake", True))
         self.privacy_mic.set_silently(self.bool_setting("privacy/mute_mic") and bool(PACTL))
-        self.virtual_autostart.set_silently(self.bool_setting("virtual/autostart"))
+        # On by default: apps find "EMEET PIXY (PixyDeck)" without anyone pressing Start.
+        self.virtual_autostart.set_silently(self.bool_setting("virtual/autostart", True))
         self.calls_enabled.set_silently(self.bool_setting("calls/enabled"))
         start = str(self.settings.value("calls/start", "track"))
         self.calls_start.set_current(start if start in ("track", "keep") else "track")

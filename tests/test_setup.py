@@ -443,11 +443,25 @@ class DeviceScriptTest(unittest.TestCase):
     def calls(self):
         return self.log.read_text().splitlines() if self.log.exists() else []
 
-    def test_creates_the_device_under_the_camera_name(self):
-        self.device(20, "Dummy video device")
+    def test_creates_the_device_under_the_camera_name_first_in_line(self):
         result = self.run_script("start")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.calls(), [f"add -n EMEET PIXY (PixyDeck) -x 1 {self.dev}/video21"])
+        self.assertEqual(self.calls(), [f"add -n EMEET PIXY (PixyDeck) -x 1 {self.dev}/video0"])
+
+    def test_takes_the_next_free_number_when_the_camera_came_first(self):
+        self.device(0, "EMEET PIXY: EMEET PIXY")
+        self.device(1, "EMEET PIXY: EMEET PIXY")
+        self.assertEqual(self.run_script("start").returncode, 0)
+        self.assertEqual(self.calls(), [f"add -n EMEET PIXY (PixyDeck) -x 1 {self.dev}/video2"])
+
+    def test_unit_runs_before_the_cameras_are_announced(self):
+        unit = (ROOT / "deploy" / "pixydeck-virtual-camera.service.in").read_text()
+        self.assertIn("DefaultDependencies=no", unit)
+        self.assertIn("Before=systemd-udev-trigger.service", unit)
+        self.assertIn("WantedBy=sysinit.target", unit)
+        for installer in (ROOT / "packaging" / "deb" / "postinst", ROOT / "install.sh", HELPER):
+            # enable would keep the old multi-user.target link; reenable moves it.
+            self.assertIn("reenable", installer.read_text(), installer)
 
     def test_existing_device_is_reused(self):
         self.device(20, "EMEET PIXY (PixyDeck)")
@@ -459,7 +473,7 @@ class DeviceScriptTest(unittest.TestCase):
         (self.dev / "video20").unlink()  # the delete frees the node
         self.assertEqual(self.run_script("start").returncode, 0)
         self.assertEqual(self.calls(), [f"delete {self.dev}/video20",
-                                        f"add -n EMEET PIXY (PixyDeck) -x 1 {self.dev}/video20"])
+                                        f"add -n EMEET PIXY (PixyDeck) -x 1 {self.dev}/video0"])
 
     def test_old_device_in_use_is_kept(self):
         self.device(20, "PixyDeck Virtual Camera")

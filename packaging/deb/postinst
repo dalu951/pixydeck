@@ -4,7 +4,7 @@ if [ "$1" = "configure" ]; then
     udevadm control --reload-rules || true
     udevadm trigger --subsystem-match=hidraw --action=add || true
     systemctl daemon-reload || true
-    systemctl enable pixydeck-virtual-camera.service >/dev/null 2>&1 || true
+    systemctl reenable pixydeck-virtual-camera.service >/dev/null 2>&1 || true
     if ! systemctl restart pixydeck-virtual-camera.service 2>/dev/null; then
         echo "PixyDeck: the virtual camera could not start yet (is v4l2loopback built for $(uname -r)?)."
         echo "          Open PixyDeck -> Setup after a reboot to finish."

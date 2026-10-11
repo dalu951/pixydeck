@@ -56,7 +56,7 @@ Fill with **blur**, a **gradient**, a **colour** or your own **image**. Effects 
 
 | Option | When to use |
 | --- | --- |
-| **Processed virtual camera** | Select *EMEET PIXY (PixyDeck)* in Meet, Zoom, Teams, WhatsApp or OBS. Everything you see in PixyDeck – zoom, auto-framing, background, stabilization – is what others see. With *Start with PixyDeck* it is always available; while PixyDeck has no camera picture (another app holds the PIXY) it shows a waiting screen, and your picture follows as soon as the camera is free. |
+| **Processed virtual camera** | Select *EMEET PIXY (PixyDeck)* in Meet, Zoom, Teams, WhatsApp or OBS. Everything you see in PixyDeck – zoom, auto-framing, background, stabilization – is what others see. It is created at boot as the first camera, so most apps pick it without asking, and *Start with PixyDeck* (on by default) keeps it running; while PixyDeck has no camera picture (another app holds the PIXY) it shows a waiting screen, and your picture follows as soon as the camera is free. |
 | **Direct virtual camera** | Lowest CPU: FFmpeg forwards the camera unchanged; hardware zoom only. Choose 30 fps at 1080p to keep hardware zoom. |
 | **Release camera** | Other apps open the physical EMEET PIXY directly; PixyDeck keeps controlling PTZ, AI and picture settings. |
 

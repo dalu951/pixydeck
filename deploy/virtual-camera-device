@@ -3,7 +3,8 @@ set -euo pipefail
 
 NAME="EMEET PIXY (PixyDeck)"
 LEGACY_NAME="PixyDeck Virtual Camera"  # before 0.5.0
-START=20
+# Lowest free number: at boot that is /dev/video0, ahead of the real camera.
+START=0
 END=29
 # Overridable only for the test suite; systemd and pkexec run this with a clean environment.
 SYSFS="${PIXYDECK_SYSFS:-/sys}"

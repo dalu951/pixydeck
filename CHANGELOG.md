@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **No camera choice needed**: the virtual camera is created at boot before the real camera is announced, so it becomes `/dev/video0` – apps that take the first camera (WhatsApp, browsers) get PixyDeck automatically. *Start with PixyDeck* is now on by default
 - Auto-framing keeps up when you sit down or stand up: it widens after 0.8 s without a face (was 2.5 s), the face detector tolerates motion blur better, and while the camera's own tracking follows you the digital crop stays centred (the camera owns the position, no more up/down lag from two controllers) and zooms at most 1.6×
 - **Separate pan and tilt speed** – a fast tilt keeps tracking with you when you stand up or sit down; PixyDeck sets the speeds again when the camera falls back to its own
 - The virtual camera service loads v4l2loopback with `devices=0`, so no empty “Dummy video device” appears in apps' camera lists

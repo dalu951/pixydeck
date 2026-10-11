@@ -95,7 +95,7 @@ sudo install -m 0644 "$TMP/pixydeck.policy" "$POLICY"
 sudo udevadm control --reload-rules
 sudo udevadm trigger --subsystem-match=hidraw || true
 sudo systemctl daemon-reload
-sudo systemctl enable pixydeck-virtual-camera.service
+sudo systemctl reenable pixydeck-virtual-camera.service
 
 if [[ -d "/lib/modules/$(uname -r)" ]] && modinfo v4l2loopback >/dev/null 2>&1; then
     if ! sudo systemctl restart pixydeck-virtual-camera.service; then

@@ -1,6 +1,11 @@
 [Unit]
 Description=PixyDeck virtual camera device (v4l2loopback)
-After=systemd-modules-load.service
+# Created before udev announces the cameras at boot, so the virtual camera
+# takes /dev/video0 and apps that open the first camera get PixyDeck.
+DefaultDependencies=no
+After=systemd-modules-load.service systemd-udevd.service
+Before=systemd-udev-trigger.service sysinit.target shutdown.target
+Conflicts=shutdown.target
 
 [Service]
 Type=oneshot
@@ -27,4 +32,4 @@ RestrictAddressFamilies=AF_UNIX
 SystemCallArchitectures=native
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=sysinit.target
