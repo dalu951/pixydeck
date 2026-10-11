@@ -485,6 +485,13 @@ class OutputWatchTest(unittest.TestCase):
 
 
 
+class DetectorSettingsTest(unittest.TestCase):
+    def test_detector_keeps_moving_faces(self):
+        from pixydeck import vision
+        self.assertLessEqual(vision.DETECT_SCORE, 0.6)
+        self.assertGreaterEqual(vision.DETECT_SCORE, 0.5)  # still rejects posters and patterns
+
+
 class PlaceholderFrameTest(unittest.TestCase):
     def test_size_and_look(self):
         from pixydeck.vision import placeholder_frame

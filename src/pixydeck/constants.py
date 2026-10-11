@@ -37,6 +37,11 @@ IMAGE_AUTO = [
 AUTO_CONTROLS = [entry[1] for entry in IMAGE_AUTO]
 
 FRAMING = {"tight": 0.62, "medium": 0.45, "wide": 0.3}
+# Seconds without a detected face before auto-framing widens to the full picture.
+FACE_LOST_AFTER = 0.8
+# While the camera's own tracking follows you, the digital crop only adds a
+# little zoom, so a quick move (sitting down) stays inside the picture.
+TRACKING_MAX_ZOOM = 1.6
 
 # Who owns the camera stream: the preview, another app, or the virtual camera.
 PREVIEW, RELEASED, VIRTUAL_DIRECT, VIRTUAL_PROCESSED = "preview", "released", "direct", "processed"

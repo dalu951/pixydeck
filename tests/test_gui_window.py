@@ -410,6 +410,35 @@ class AutoFramingTest(WindowCase):
             w.crop_tick()
         self.assertEqual(w.zoom_value, constants.ZOOM_MIN)
 
+    def run_crop(self, ticks):
+        for _ in range(ticks):
+            self.window.last_tick = time.monotonic() - 0.1
+            self.window.crop_tick()
+
+    def test_lost_face_widens_quickly(self):
+        w = self.window
+        w.autoframe.setChecked(True)
+        w.framing.set_current("tight")
+        w.on_faces([(0.45, 0.3, 0.08, 0.12)])
+        self.run_crop(40)
+        self.assertGreater(w.zoom_value, 150)
+        w.last_faces_at = time.monotonic() - (constants.FACE_LOST_AFTER + 0.1)
+        w.on_faces([])  # e.g. motion blur while sitting down
+        self.assertEqual(w.smoother.target, Crop())
+
+    def test_camera_tracking_limits_the_digital_zoom(self):
+        w = self.window
+        w.autoframe.setChecked(True)
+        w.framing.set_current("tight")
+        w.tracking_mode = "track"
+        w.on_faces([(0.45, 0.3, 0.05, 0.08)])  # small face would want a big zoom
+        self.run_crop(60)
+        self.assertLessEqual(w.zoom_value, round(constants.TRACKING_MAX_ZOOM * 100) + 1)
+        w.tracking_mode = "idle"
+        w.on_faces([(0.45, 0.3, 0.05, 0.08)])
+        self.run_crop(60)
+        self.assertGreater(w.zoom_value, round(constants.TRACKING_MAX_ZOOM * 100) + 1)
+
     def test_drag_and_double_click_ignored_while_framing(self):
         w = self.window
         w.autoframe.setChecked(True)

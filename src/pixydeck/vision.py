@@ -48,6 +48,9 @@ else:  # pragma: no cover - optional extra
 MODEL = Path(__file__).resolve().parent / "assets" / "face_detection_yunet_2023mar.onnx"
 DETECT_WIDTH = 480
 DETECT_INTERVAL = 0.15
+# YuNet confidence; lower than the model's 0.9 default so a face stays found
+# while it moves quickly (sitting down, standing up).
+DETECT_SCORE = 0.6
 GREEN_CHECK_INTERVAL = 0.5
 # Keying works on a frame of at most this width (half-decoded 4K).
 KEY_WIDTH = 1920
@@ -559,7 +562,7 @@ class FrameProcessor(QObject):
             image = cv2.resize(image, (DETECT_WIDTH, round(height * scale)), interpolation=cv2.INTER_AREA)
             height, width = image.shape[:2]
         if self._detector is None:
-            self._detector = cv2.FaceDetectorYN.create(str(MODEL), "", (width, height), 0.75)
+            self._detector = cv2.FaceDetectorYN.create(str(MODEL), "", (width, height), DETECT_SCORE)
         self._detector.setInputSize((width, height))
         _, found = self._detector.detect(image)
         faces = []

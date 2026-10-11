@@ -37,6 +37,7 @@ from .background_panel import BackgroundMixin
 from .constants import (
     FOV_H,
     FOV_V,
+    FACE_LOST_AFTER,
     FRAMING,
     HW_ZOOM_MAX,
     PAN_LIMIT,
@@ -45,6 +46,7 @@ from .constants import (
     RELEASED,
     TILT_MAX,
     TILT_MIN,
+    TRACKING_MAX_ZOOM,
     VIRTUAL_DIRECT,
     VIRTUAL_PROCESSED,
     ZOOM_MAX,
@@ -827,8 +829,9 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         if faces:
             self.last_faces_at = time.monotonic()
             fill = FRAMING.get(self.framing.current() or "medium", 0.45)
-            self.smoother.set_target(framing_target(faces, fill=fill))
-        elif time.monotonic() - self.last_faces_at > 2.5:
+            max_zoom = TRACKING_MAX_ZOOM if self.tracking_mode == "track" else 2.5
+            self.smoother.set_target(framing_target(faces, fill=fill, max_zoom=max_zoom))
+        elif time.monotonic() - self.last_faces_at > FACE_LOST_AFTER:
             self.smoother.set_target(Crop())
 
     def crop_tick(self) -> None:
