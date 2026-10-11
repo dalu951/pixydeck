@@ -829,8 +829,15 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         if faces:
             self.last_faces_at = time.monotonic()
             fill = FRAMING.get(self.framing.current() or "medium", 0.45)
-            max_zoom = TRACKING_MAX_ZOOM if self.tracking_mode == "track" else 2.5
-            self.smoother.set_target(framing_target(faces, fill=fill, max_zoom=max_zoom))
+            if self.tracking_mode == "track":
+                # The camera already turns towards you; moving the crop as
+                # well makes two controllers chase each other (up/down lag
+                # when you sit down). Keep the crop centred, only zoom.
+                target = framing_target(faces, fill=fill, max_zoom=TRACKING_MAX_ZOOM)
+                target = Crop(0.5, 0.5, target.zoom)
+            else:
+                target = framing_target(faces, fill=fill)
+            self.smoother.set_target(target)
         elif time.monotonic() - self.last_faces_at > FACE_LOST_AFTER:
             self.smoother.set_target(Crop())
 

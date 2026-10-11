@@ -435,9 +435,22 @@ class AutoFramingTest(WindowCase):
         self.run_crop(60)
         self.assertLessEqual(w.zoom_value, round(constants.TRACKING_MAX_ZOOM * 100) + 1)
         w.tracking_mode = "idle"
+        w.smoother = gui.Smoother()
         w.on_faces([(0.45, 0.3, 0.05, 0.08)])
         self.run_crop(60)
         self.assertGreater(w.zoom_value, round(constants.TRACKING_MAX_ZOOM * 100) + 1)
+
+    def test_camera_tracking_owns_the_position(self):
+        w = self.window
+        w.autoframe.setChecked(True)
+        w.tracking_mode = "track"
+        w.on_faces([(0.2, 0.7, 0.08, 0.12)])  # face low and left, e.g. sitting down
+        self.assertEqual((w.smoother.target.cx, w.smoother.target.cy), (0.5, 0.5))
+        self.assertGreater(w.smoother.target.zoom, 1.0)
+        w.tracking_mode = "idle"
+        w.smoother = gui.Smoother()
+        w.on_faces([(0.2, 0.7, 0.08, 0.12)])
+        self.assertLess(w.smoother.target.cx, 0.5)  # without camera tracking the crop follows
 
     def test_drag_and_double_click_ignored_while_framing(self):
         w = self.window
