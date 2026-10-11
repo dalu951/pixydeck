@@ -86,6 +86,8 @@ class GuiTestCase(unittest.TestCase):
             mock.patch.object(gui, "PixyController", FakeController),
             mock.patch.object(gui.PixyGUI, "start_camera", demo_start_camera),
             mock.patch.object(gui.PixyGUI, "stop_camera", lambda self: setattr(self, "camera", None)),
+            # Autostart is on by default; a test must never start a real FFmpeg writer.
+            mock.patch.object(gui.PixyGUI, "autostart_virtual_camera", lambda self: None),
             mock.patch.object(gui, "run_checks", lambda: []),
             mock.patch.object(privacy, "camera_users", lambda *a, **k: []),
             mock.patch.object(privacy, "pixy_video_nodes", lambda: []),

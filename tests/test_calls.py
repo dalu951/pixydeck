@@ -18,6 +18,8 @@ from pixydeck import gui, privacy  # noqa: E402
 from pixydeck.privacy import CallDetector  # noqa: E402
 
 ZOOM = [(4242, "zoom")]
+# The GUI harness stubs autostart out; these tests exercise the real method.
+REAL_AUTOSTART = gui.PixyGUI.autostart_virtual_camera
 
 
 class CallDetectorTest(unittest.TestCase):
@@ -270,7 +272,7 @@ class VirtualAutostartTest(GuiTestCase):
         w.virtual_autostart.setChecked(False)
         w.virtual_autostart.setChecked(True)
         with mock.patch.object(w, "start_virtual_camera") as start:
-            w.autostart_virtual_camera()
+            REAL_AUTOSTART(w)
         start.assert_called_once()
         self.assertTrue(QSettings("pixydeck", "pixydeck").value("virtual/autostart", type=bool))
 
@@ -278,10 +280,10 @@ class VirtualAutostartTest(GuiTestCase):
         w = self.window
         w.virtual_autostart.setChecked(False)
         with mock.patch.object(w, "start_virtual_camera") as start:
-            w.autostart_virtual_camera()
+            REAL_AUTOSTART(w)
             w.virtual_autostart.setChecked(True)
             w.mode = gui.VIRTUAL_PROCESSED
-            w.autostart_virtual_camera()
+            REAL_AUTOSTART(w)
         start.assert_not_called()
 
     def test_setting_is_restored(self):

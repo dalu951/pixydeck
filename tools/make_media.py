@@ -30,14 +30,14 @@ os.environ["XDG_CONFIG_HOME"] = CONFIG  # never read or write the user's setting
 
 import cv2  # noqa: E402
 import numpy as np  # noqa: E402
-from PySide6.QtCore import QObject, QPointF, QRectF, Qt  # noqa: E402
-from PySide6.QtGui import QColor, QImage, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient  # noqa: E402
+from PySide6.QtCore import QObject, QPoint, QPointF, QRectF, Qt  # noqa: E402
+from PySide6.QtGui import QColor, QFont, QImage, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient  # noqa: E402
 from PySide6.QtMultimedia import QVideoFrame  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from pixydeck import gui, privacy, setup, virtual_camera  # noqa: E402
 from pixydeck.background import Background  # noqa: E402
-from pixydeck.vision import Crop, Smoother, framing_target  # noqa: E402
+from pixydeck.vision import Crop, Smoother, Stabilizer, framing_target, shift_image  # noqa: E402
 from pixydeck.widgets import set_state  # noqa: E402
 
 W, H = 1920, 1080
@@ -221,6 +221,8 @@ def make_window():
 
     gui.PixyGUI.start_camera = start_camera
     gui.PixyGUI.stop_camera = lambda self: None
+    # Never feed a real virtual camera from the demo (autostart is on by default).
+    gui.PixyGUI.autostart_virtual_camera = lambda self: None
     window = gui.PixyGUI()
     window.resize(*WINDOW)
     window.show()
@@ -267,6 +269,7 @@ def screenshots(window, out: Path) -> None:
 
     window.tabs.setCurrentIndex(0)
     grab(window, out / "camera.png")
+    tour(window, out / "tour.png")
 
     window.tabs.setCurrentIndex(1)
     window.focus_mode.set_current("area")
@@ -290,6 +293,19 @@ def screenshots(window, out: Path) -> None:
     window.view.set_processed(None)
     window.bg_mode.set_current("off")
 
+    window.tabs.setCurrentIndex(4)
+    window.calls_enabled.set_silently(True)
+    window.calls_status.setText("📞 In a call – zoom")
+    window.pill_users.setText("📞 Call: zoom")
+    window.pill_users.show()
+    set_state(window.pill_users, "ok")
+    window.privacy_enabled.set_silently(True)
+    window.privacy_status.setText("Camera in use – timer paused")
+    grab(window, out / "calls.png")
+    window.pill_users.hide()
+    window.calls_enabled.set_silently(False)
+    window.privacy_enabled.set_silently(False)
+
     window.tabs.setCurrentIndex(5)
     window.pill_virtual.setText("Virtual cam on")
     set_state(window.pill_virtual, "on")
@@ -307,6 +323,73 @@ def screenshots(window, out: Path) -> None:
     settle()
     dialog.grab().save(str(out / "setup.png"))
     dialog.close()
+
+
+def tour(window, path: Path) -> None:
+    """The main window with numbered markers for the README's GUI tour."""
+    window.update_hud()
+    settle()
+    image = window.grab().toImage()
+    p = QPainter(image)
+    p.setRenderHint(QPainter.Antialiasing)
+    font = QFont()
+    font.setPixelSize(17)
+    font.setBold(True)
+    p.setFont(font)
+
+    def corner(widget, dx=0, dy=0):
+        point = widget.mapTo(window, QPoint(0, 0))
+        return QPointF(point.x() + dx, point.y() + dy)
+
+    setup = window.setup_button
+    markers = [
+        corner(window.pill_tracking, -14, 4),                         # 1 status pills
+        corner(setup, setup.width() // 2, setup.height() + 14),       # 2 setup
+        corner(window.preview_stack, 30, 70),                         # 3 preview
+        corner(window.zoom_slider, 40, -16),                          # 4 toolbar
+        corner(window.tabs, -8, 14),                                  # 5 tabs
+        corner(window.speed_sliders["pan"], -24, 10),                 # 6 settings cards
+    ]
+    for number, centre in enumerate(markers, 1):
+        p.setPen(QPen(QColor("#0b0d11"), 3))
+        p.setBrush(QColor("#ffb020"))
+        p.drawEllipse(centre, 16, 16)
+        p.setPen(QColor("#0b0d11"))
+        p.drawText(QRectF(centre.x() - 16, centre.y() - 16, 32, 32), Qt.AlignCenter, str(number))
+    p.end()
+    image.save(str(path))
+
+
+def animation_stabilize(out: Path) -> None:
+    """Side by side: a shaking camera without and with "Steady picture".
+
+    The right half runs the real Stabilizer on the painted scene; both
+    halves get the same 8 % reserve crop the app uses, so only the shake
+    differs.
+    """
+    frame, _ = scene()
+    base = cv2.resize(qimage_to_bgr(frame), (960, 540), interpolation=cv2.INTER_AREA)
+    stabilizer = Stabilizer()
+    zoom = 1.0 + 2 * stabilizer.margin
+    crop_w, crop_h = round(960 / zoom), round(540 / zoom)
+    x0, y0 = (960 - crop_w) // 2, (540 - crop_h) // 2
+    with tempfile.TemporaryDirectory() as tmp:
+        for i in range(72):
+            t = i / 12
+            sx = 7 * math.sin(2 * math.pi * 1.3 * t) + 3 * math.sin(2 * math.pi * 3.1 * t)
+            sy = 5 * math.sin(2 * math.pi * 1.1 * t + 1)
+            shaken = cv2.warpAffine(base, np.float32([[1, 0, sx], [0, 1, sy]]), (960, 540),
+                                    borderMode=cv2.BORDER_REPLICATE)
+            steady = shift_image(shaken, stabilizer.update(shaken))
+            halves = []
+            for image, label in ((shaken, "Without"), (steady, "Steady picture")):
+                half = cv2.resize(image[y0:y0 + crop_h, x0:x0 + crop_w], (480, 270), interpolation=cv2.INTER_AREA)
+                cv2.rectangle(half, (10, 10), (24 + 11 * len(label), 40), (17, 13, 11), -1)
+                cv2.putText(half, label, (17, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (240, 240, 240), 1, cv2.LINE_AA)
+                halves.append(half)
+            divider = np.full((270, 6, 3), (17, 13, 11), np.uint8)
+            cv2.imwrite(str(Path(tmp) / f"{i:04d}.png"), np.hstack([halves[0], divider, halves[1]]))
+        gif(Path(tmp), out / "stabilize.gif", fps=12, width=966)
 
 
 def animation_zoom(window, out: Path) -> None:
@@ -384,6 +467,7 @@ def main() -> int:
         animation_zoom(window, out)
         animation_autoframe(window, out)
         animation_background(window, out)
+        animation_stabilize(out)
     else:
         print("ffmpeg not found – skipping GIFs")
     window.close()

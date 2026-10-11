@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Docs: README rebuilt around “In 30 seconds”, grouped features, a numbered GUI tour and “Which camera do I pick?”; new [GUI tour](docs/en/gui-tour.md) page (English and German) explaining every control; new synthetic media – annotated window, Calls tab, and a before/after animation of the stabilizer
+- The media generator and the GUI tests can no longer start a real virtual camera writer
+
 ## 0.5.2 - 2026-10-11
 
 - **Find me when I sit down** (Tracking tab, on by default): the PIXY's own tracking tilts too slowly to follow you when you sit down and then stops looking. PixyDeck learns your seated tilt and tilts back there when your face has been gone for over a second; the camera's tracking takes over again
