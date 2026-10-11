@@ -199,6 +199,8 @@ class PrivacyMixin:
             text = ""
         elif self.call_detector.active:
             text = "📞 In a call – " + ", ".join(self.call_detector.apps)
+            if self.pill_users.isVisibleTo(self):
+                self.pill_users.setText("📞 Call: " + ", ".join(self.call_detector.apps))
         else:
             text = "No call – waiting for Zoom, Teams, Meet, OBS … to open the camera"
         self.calls_status.setText(text)

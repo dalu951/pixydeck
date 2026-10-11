@@ -132,6 +132,7 @@ class CallsWindowTest(GuiTestCase):
         w = self.window
         w.calls_enabled.setChecked(False)
         self.start_call()
+        self.assertEqual(w.pill_users.text(), "In use: zoom")
         self.end_call()
         self.assertEqual(w.tracking_mode, "idle")
         self.assertEqual(w.calls_status.text(), "")
@@ -141,6 +142,7 @@ class CallsWindowTest(GuiTestCase):
         self.start_call()
         self.assertEqual(w.tracking_mode, "track")
         self.assertIn("In a call – zoom", w.calls_status.text())
+        self.assertEqual(w.pill_users.text(), "📞 Call: zoom")
         self.assertIn("Call started – zoom", w.statusBar().currentMessage())
         self.end_call()
         self.assertEqual(w.tracking_mode, "privacy")
