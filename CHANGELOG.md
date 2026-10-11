@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 - 2026-10-11
 
 - **Motor speed** (1–240 °/s) for pan and tilt – slider on the Camera tab, `pixydeck-cli pan-speed`/`tilt-speed`; restored on start
 - **Tracking target**: *Auto*, *Face* or *Upper body* (`pixydeck-cli target`)
+- All of the above verified on a PIXY by the user, not only by readback
 - **Exposure, white-balance and focus locks** on the Image tab (`pixydeck-cli exposure-lock|wb-lock|focus-lock`)
 - **Camera power-on position**: store the current pan/tilt in the PIXY itself (`pixydeck-cli power-on-position save`)
 - `pixydeck-cli state` shows every on-board setting the camera reports
