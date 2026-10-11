@@ -401,5 +401,66 @@ class ButtonsInThemeTest(unittest.TestCase):
         self.assertEqual(image.pixelColor(12, 15).name(), widgets.ACCENT)
 
 
+class WheelGuardTest(unittest.TestCase):
+    """Scrolling a page over a slider scrolls the page, not the slider."""
+
+    def setUp(self):
+        from PySide6.QtWidgets import QComboBox, QScrollArea, QSpinBox, QVBoxLayout, QWidget
+        self.guard = widgets.WheelGuard()
+        APP.installEventFilter(self.guard)
+        self.addCleanup(APP.removeEventFilter, self.guard)
+        self.area = QScrollArea()
+        self.area.setWidgetResizable(True)
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        self.row = widgets.SliderRow("Speed", 0, 100, 50)
+        self.spin = QSpinBox()
+        self.combo = QComboBox()
+        self.combo.addItems(["a", "b", "c"])
+        for widget in (self.row, self.spin, self.combo):
+            layout.addWidget(widget)
+        layout.addSpacing(3000)
+        self.area.setWidget(page)
+        self.area.resize(300, 200)
+        self.area.show()
+        APP.processEvents()
+        self.row.slider.clearFocus()  # show() hands focus to the first focusable control
+        APP.processEvents()
+        self.addCleanup(self.area.deleteLater)
+        self.addCleanup(self.area.close)
+
+    def test_unfocused_controls_scroll_the_page(self):
+        bar = self.area.verticalScrollBar()
+        send_wheel(self.row.slider, -120)
+        self.assertEqual(self.row.slider.value(), 50)
+        self.assertGreater(bar.value(), 0)
+        before = bar.value()
+        send_wheel(self.spin, -120)
+        send_wheel(self.combo, -120)
+        self.assertEqual(self.spin.value(), 0)
+        self.assertEqual(self.combo.currentIndex(), 0)
+        self.assertGreater(bar.value(), before)
+
+    def test_clicked_slider_takes_the_wheel(self):
+        self.assertEqual(self.row.slider.focusPolicy(), Qt.StrongFocus)
+        self.row.slider.setFocus()
+        APP.processEvents()
+        send_wheel(self.row.slider, 120)
+        self.assertNotEqual(self.row.slider.value(), 50)
+        self.assertEqual(self.area.verticalScrollBar().value(), 0)
+
+    def test_controls_outside_a_scroll_area_are_untouched(self):
+        row = widgets.SliderRow("Zoom", 0, 100, 50)
+        row.show()
+        self.addCleanup(row.close)
+        send_wheel(row.slider, 120)
+        self.assertNotEqual(row.slider.value(), 50)
+
+    def test_other_events_pass(self):
+        event = QEvent(QEvent.Enter)
+        self.assertFalse(self.guard.eventFilter(self.row.slider, event))
+        self.assertFalse(self.guard.eventFilter(self.area.verticalScrollBar(), event))
+
+
 if __name__ == "__main__":
     unittest.main()

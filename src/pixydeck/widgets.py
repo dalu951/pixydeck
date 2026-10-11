@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from PySide6.QtCore import (
-    Property, QEasingCurve, QPointF, QPropertyAnimation, QRectF, QSize, Qt,
+    Property, QEasingCurve, QEvent, QObject, QPointF, QPropertyAnimation, QRectF, QSize, Qt,
     QTimer, Signal,
 )
 from PySide6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen, QPixmap, QTransform
 from PySide6.QtMultimediaWidgets import QGraphicsVideoItem
 from PySide6.QtWidgets import (
+    QAbstractScrollArea, QAbstractSlider, QAbstractSpinBox, QApplication, QComboBox, QScrollBar,
     QAbstractButton, QButtonGroup, QFrame, QGraphicsPixmapItem, QGraphicsRectItem, QGraphicsScene,
     QGraphicsView, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSlider,
     QVBoxLayout, QWidget,
@@ -208,6 +209,7 @@ class SliderRow(QWidget):
         top.addWidget(self.value_label)
         layout.addLayout(top)
         self.slider = QSlider(Qt.Horizontal)
+        self.slider.setFocusPolicy(Qt.StrongFocus)  # a click gives focus, the wheel alone does not
         self.slider.setRange(minimum, maximum)
         self.slider.setValue(value)
         self.slider.valueChanged.connect(self._changed)
@@ -620,3 +622,27 @@ class InfoPanel(QWidget):
         path = QPainterPath()
         path.addRoundedRect(QRectF(self.rect()), 12, 12)
         p.fillPath(path, QColor("#0b0d11"))
+
+
+class WheelGuard(QObject):
+    """Scrolling a page must not change the slider that passes under the mouse.
+
+    Wheel events over a slider, spin box or combo box without keyboard focus
+    scroll the surrounding page instead; click the control first to adjust
+    it with the wheel. Controls outside a scroll area are left alone.
+    """
+
+    GUARDED = (QAbstractSlider, QAbstractSpinBox, QComboBox)
+
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802 - Qt API
+        if event.type() != QEvent.Wheel or not isinstance(obj, self.GUARDED) or isinstance(obj, QScrollBar):
+            return False
+        if obj.hasFocus():
+            return False
+        parent = obj.parentWidget()
+        while parent is not None and not isinstance(parent, QAbstractScrollArea):
+            parent = parent.parentWidget()
+        if parent is None:
+            return False
+        QApplication.sendEvent(parent.verticalScrollBar(), event)
+        return True

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Scrolling a tab no longer changes the slider, spin box or drop-down that passes under the mouse; click a control first to adjust it with the wheel
+
 ## 0.4.0 - 2026-10-11
 
 - **Motor speed** (1–240 °/s) for pan and tilt – slider on the Camera tab, `pixydeck-cli pan-speed`/`tilt-speed`; restored on start

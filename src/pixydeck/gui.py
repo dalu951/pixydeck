@@ -57,7 +57,7 @@ from .privacy import PACTL, PrivacyMixin, set_pixy_microphone_muted
 from .setup import SetupDialog, needs_attention, run_checks
 from .virtual_camera import VirtualCameraMixin
 from .vision import Crop, FrameProcessor, Smoother, framing_target, vision_available
-from .widgets import Card, InfoPanel, PreviewView, PtzPad, SettingRow, SliderRow, THEME
+from .widgets import Card, InfoPanel, PreviewView, PtzPad, SettingRow, SliderRow, THEME, WheelGuard
 from .worker import ControlWorker
 
 try:
@@ -195,6 +195,8 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         self.install_shortcuts()
         self.key_filter = KeyFilter(self)
         QApplication.instance().installEventFilter(self.key_filter)
+        self.wheel_guard = WheelGuard(self)
+        QApplication.instance().installEventFilter(self.wheel_guard)
 
         self.start_camera()
         self.refresh_virtual_device()
