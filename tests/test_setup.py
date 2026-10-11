@@ -486,6 +486,14 @@ class DeviceScriptTest(unittest.TestCase):
     def test_usage(self):
         self.assertEqual(self.run_script("dance").returncode, 2)
 
+    def test_module_is_loaded_without_a_default_device(self):
+        # A bare "modprobe v4l2loopback" adds an empty "Dummy video device" that apps list.
+        for path in (ROOT / "deploy" / "pixydeck-virtual-camera.service.in", HELPER):
+            lines = [line for line in path.read_text().splitlines()
+                     if "modprobe v4l2loopback" in line and not line.lstrip().startswith("#")]
+            self.assertTrue(lines, path)
+            self.assertTrue(all("devices=0" in line for line in lines), path)
+
 
 if __name__ == "__main__":
     unittest.main()

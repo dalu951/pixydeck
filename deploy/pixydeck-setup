@@ -15,7 +15,7 @@ die() { echo "pixydeck-setup: $*" >&2; exit 1; }
 case "${1:-}" in
     virtual-camera)
         # Load the module now and make the device persistent across reboots.
-        modprobe v4l2loopback || die "the v4l2loopback kernel module is not installed for kernel $(uname -r)"
+        modprobe v4l2loopback devices=0 || die "the v4l2loopback kernel module is not installed for kernel $(uname -r)"
         systemctl daemon-reload
         systemctl enable "$UNIT" >/dev/null
         systemctl restart "$UNIT"

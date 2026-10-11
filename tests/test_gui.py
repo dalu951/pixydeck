@@ -440,18 +440,34 @@ class CameraCommandsTest(GuiTestCase):
         self.assertEqual(self.called("target_track")[-1], ("target_track", "upper-body"))
         self.assertEqual(w.settings.value("camera/target"), "upper-body")
 
-    def test_motor_speed_goes_to_both_axes(self):
+    def test_pan_and_tilt_speed_are_separate(self):
         w = self.window
-        w.motor_speed.slider.setValue(120)
+        w.speed_sliders["pan"].slider.setValue(120)
+        w.speed_sliders["tilt"].slider.setValue(180)
         self.assertTrue(self.settle(lambda: len(self.called("motor_speed")) >= 2))
-        self.assertEqual({c[1] for c in self.called("motor_speed")}, {"pan", "tilt"})
-        self.assertTrue(all(c[2] == 120 for c in self.called("motor_speed")))
+        self.assertIn(("motor_speed", "pan", 120), self.controller.calls)
+        self.assertIn(("motor_speed", "tilt", 180), self.controller.calls)
         self.assertEqual(int(w.settings.value("camera/motor_speed")), 120)
+        self.assertEqual(int(w.settings.value("camera/tilt_speed")), 180)
 
     def test_motor_speed_range_matches_backend(self):
-        slider = self.window.motor_speed.slider
-        self.assertEqual((slider.minimum(), slider.maximum()),
-                         (gui.backend.MOTOR_SPEED_MIN, gui.backend.MOTOR_SPEED_MAX))
+        for row in self.window.speed_sliders.values():
+            self.assertEqual((row.slider.minimum(), row.slider.maximum()),
+                             (gui.backend.MOTOR_SPEED_MIN, gui.backend.MOTOR_SPEED_MAX))
+
+    def test_speed_the_camera_lost_is_set_again(self):
+        w = self.window
+        w.speed_sliders["tilt"].set_value_silently(180)
+        w.on_camera_state({"pan-speed": 60, "tilt-speed": 60})
+        self.assertTrue(self.settle(lambda: ("motor_speed", "tilt", 180) in self.controller.calls))
+        self.assertNotIn("pan", [c[1] for c in self.called("motor_speed")])  # 60 is the pan setting
+
+    def test_tilt_speed_defaults_to_the_saved_pan_speed(self):
+        QSettings("pixydeck", "pixydeck").setValue("camera/motor_speed", 90)
+        self.close_window()
+        self.window = gui.PixyGUI()
+        self.controller = self.window.controller
+        self.assertEqual(self.window.speed_sliders["tilt"].value(), 90)
 
     def test_locks_are_sent_not_persisted(self):
         w = self.window
@@ -490,7 +506,7 @@ class CameraCommandsTest(GuiTestCase):
         self.close_window()
         self.window = gui.PixyGUI()
         self.controller = self.window.controller
-        self.assertEqual(self.window.motor_speed.value(), 30)
+        self.assertEqual(self.window.speed_sliders["pan"].value(), 30)
         self.window.restore_camera_state()
         self.assertTrue(self.settle(lambda: len(self.called("motor_speed")) >= 2))
         self.assertIn(("target_track", "face"), self.controller.calls)
@@ -503,7 +519,7 @@ class CameraCommandsTest(GuiTestCase):
         self.window = gui.PixyGUI()
         self.controller = self.window.controller
         self.assertEqual(self.window.target.current(), "auto")
-        self.assertEqual(self.window.motor_speed.value(), gui.backend.MOTOR_SPEED_MAX)
+        self.assertEqual(self.window.speed_sliders["pan"].value(), gui.backend.MOTOR_SPEED_MAX)
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ Links liegt die Live-Vorschau, rechts sechs Tabs. Die Kopfzeile zeigt die Kamera
 - **Schwenk-Feld:** klicken oder ziehen, um die Kamera auszurichten; der Punkt zeigt, wohin sie schaut. Nach unten geht es nur bis −52°, darunter würde die Kamera nur in ihre Ruheposition fahren.
 - **Pfeiltasten / Pfeil-Buttons:** gedrückt halten zum Gleiten – je länger, desto schneller.
 - **Im Vorschaubild:** ziehen zum Ausrichten (bzw. zum Verschieben des Ausschnitts beim Digitalzoom), Doppelklick zentriert eine Stelle, Mausrad zoomt.
-- **Motorgeschwindigkeit:** wie schnell die Kamera dreht (1–240 °/s, Standard 60) – langsam für ruhige Schwenks im Livestream, schnell zum Anfahren einer Position. Das Tracking der Kamera nutzt sie ebenfalls; verliert es dich beim Gehen, einen hohen Wert wählen.
+- **Pan speed / Tilt speed:** wie schnell die Kamera seitlich und nach oben/unten dreht (1–240 °/s, Standard 60) – langsam für ruhige Schwenks im Livestream, schnell zum Anfahren einer Position. Das Tracking der Kamera nutzt sie ebenfalls: verliert es dich beim Aufstehen oder Hinsetzen, *Tilt speed* erhöhen, beim Gehen *Pan speed*. Fällt die Kamera auf ihre eigene Geschwindigkeit zurück, stellt PixyDeck sie wieder ein.
 - **Zoom-Regler (1×–4×):** nutzt den Hardware-Zoom der PIXY (bis 1,5×), wo der Videomodus ihn unterstützt – unter 1080p und bei 1080p30 – und darüber digitalen Zoom.
 - **Positionen 1–4:** leeren Platz anklicken speichert die aktuelle Position, ein belegter fährt sie an; Rechtsklick für mehr.
 - **Startup position** (eingeklappt): wohin die Kamera beim Start von PixyDeck fährt; **Save as camera power-on position** speichert die aktuelle Ausrichtung in der Kamera selbst – sie startet dann dort, auch ohne PixyDeck oder an einem anderen Rechner.

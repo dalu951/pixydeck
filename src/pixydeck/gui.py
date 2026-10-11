@@ -379,11 +379,17 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         center.clicked.connect(self.center_camera)
         arrows.addWidget(center, 1, 1)
         aim.body.addLayout(arrows)
-        self.motor_speed = SliderRow(
-            "Motor speed", backend.MOTOR_SPEED_MIN, backend.MOTOR_SPEED_MAX, backend.MOTOR_SPEED_DEFAULT,
-            fmt=lambda v: f"{v}°/s")
-        self.motor_speed.value_changed.connect(self.set_motor_speed)
-        aim.body.addWidget(self.motor_speed)
+        self.speed_sliders: dict[str, SliderRow] = {}
+        for axis, label, hint in (
+            ("pan", "Pan speed", "Turning left and right"),
+            ("tilt", "Tilt speed", "Up and down – raise it if tracking loses you when you stand up or sit down"),
+        ):
+            row = SliderRow(label, backend.MOTOR_SPEED_MIN, backend.MOTOR_SPEED_MAX,
+                            backend.MOTOR_SPEED_DEFAULT, fmt=lambda v: f"{v}°/s")
+            row.setToolTip(hint + ". Face tracking uses this speed too.")
+            row.value_changed.connect(lambda v, a=axis: self.set_motor_speed(a, v))
+            aim.body.addWidget(row)
+            self.speed_sliders[axis] = row
         aim.body.addWidget(self.hint(
             "Arrow keys move · scroll on the preview zooms · drag or double-click the preview to aim"))
         layout.addWidget(aim)
@@ -474,8 +480,12 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         self.audio.set_current(str(self.settings.value("camera/audio", "nc")))
         target = str(self.settings.value("camera/target", "auto"))
         self.target.set_current(target if target in backend.TARGET_TRACK_MODES else "auto")
-        self.motor_speed.set_value_silently(max(backend.MOTOR_SPEED_MIN, min(
-            backend.MOTOR_SPEED_MAX, self.int_setting("camera/motor_speed", backend.MOTOR_SPEED_DEFAULT))))
+        pan_speed = self.int_setting("camera/motor_speed", backend.MOTOR_SPEED_DEFAULT)
+        for axis, key, default in (("pan", "camera/motor_speed", backend.MOTOR_SPEED_DEFAULT),
+                                   ("tilt", "camera/tilt_speed", pan_speed)):
+            value = self.int_setting(key, default)
+            self.speed_sliders[axis].set_value_silently(
+                max(backend.MOTOR_SPEED_MIN, min(backend.MOTOR_SPEED_MAX, value)))
         self.flicker.set_current(str(self.settings.value("camera/flicker", "60")))
         self.framing.set_current(str(self.settings.value("ai/framing", "medium")))
         self.show_faces.set_silently(self.bool_setting("ai/show_faces") and vision_available())
@@ -537,7 +547,7 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         gesture = self.gesture.isChecked()
         audio = self.audio.current() or "nc"
         target = self.target.current() or "auto"
-        speed = self.motor_speed.value()
+        speeds = {axis: row.value() for axis, row in self.speed_sliders.items()}
         flicker = self.flicker.current() or "60"
         image = {}
         self.settings.beginGroup("image")
@@ -557,7 +567,7 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
             c.gesture(gesture)
             c.audio(audio)
             c.target_track(target)
-            for axis in backend.MOTOR_AXES:
+            for axis, speed in speeds.items():
                 c.motor_speed(axis, speed)
             return True
 

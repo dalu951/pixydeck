@@ -19,6 +19,7 @@ from .widgets import Card, Segmented, SettingRow, SliderRow, ToggleSwitch, set_s
 
 log = logging.getLogger(__name__)
 
+SPEED_KEYS = {"pan": "camera/motor_speed", "tilt": "camera/tilt_speed"}
 TARGET_LABELS = {"auto": "auto", "face": "face", "upper-body": "upper body"}
 
 
@@ -247,10 +248,9 @@ class ControlsMixin:
         self.worker.submit(self.controller.target_track, mode, key="target",
                            done=lambda _: self.notify(f"Tracking target: {TARGET_LABELS[mode]}"))
 
-    def set_motor_speed(self, speed: int) -> None:
-        self.settings.setValue("camera/motor_speed", speed)
-        for axis in backend.MOTOR_AXES:
-            self.worker.submit(self.controller.motor_speed, axis, speed, key=f"speed/{axis}")
+    def set_motor_speed(self, axis: str, speed: int) -> None:
+        self.settings.setValue(SPEED_KEYS[axis], speed)
+        self.worker.submit(self.controller.motor_speed, axis, speed, key=f"speed/{axis}")
 
     def set_lock(self, name: str, locked: bool) -> None:
         self.worker.submit(self.controller.lock, name, locked, key=f"lock/{name}")
@@ -325,6 +325,11 @@ class ControlsMixin:
             locked = state.get(f"{name}-lock")
             if locked is not None and locked != toggle.isChecked():
                 toggle.set_silently(locked)
+        for axis, row in self.speed_sliders.items():
+            reported = state.get(f"{axis}-speed")
+            if reported is not None and abs(reported - row.value()) > 1:
+                # The camera falls back to its own speed after a power cycle.
+                self.worker.submit(self.controller.motor_speed, axis, row.value(), key=f"speed/{axis}")
         if "target" in state and state["target"] != self.target.current():
             self.target.set_current(state["target"])
             self.settings.setValue("camera/target", state["target"])

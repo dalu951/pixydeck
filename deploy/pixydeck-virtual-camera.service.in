@@ -5,7 +5,8 @@ After=systemd-modules-load.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStartPre=/usr/sbin/modprobe v4l2loopback
+# devices=0: only PixyDeck's own device, no extra "Dummy video device"
+ExecStartPre=/usr/sbin/modprobe v4l2loopback devices=0
 ExecStart=@LIBDIR@/virtual-camera-device start
 ExecStop=@LIBDIR@/virtual-camera-device stop
 # Hardening: the helper only loads a module and talks to /dev/v4l2loopback.

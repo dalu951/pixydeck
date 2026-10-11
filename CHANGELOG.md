@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Separate pan and tilt speed** – a fast tilt keeps tracking with you when you stand up or sit down; PixyDeck sets the speeds again when the camera falls back to its own
+- The virtual camera service loads v4l2loopback with `devices=0`, so no empty “Dummy video device” appears in apps' camera lists
+
 ## 0.5.1 - 2026-10-11
 
 - Virtual camera: every frame is flushed to FFmpeg at once; with Python 3.14's larger write buffer, small frames (such as the waiting screen) were held back

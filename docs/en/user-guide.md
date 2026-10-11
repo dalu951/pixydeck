@@ -11,7 +11,7 @@ The window has the live preview on the left and six tabs on the right. The heade
 - **Pan/tilt pad:** click or drag to aim; the dot shows where the camera points. Tilt is limited to −52° … +90° because lower angles only park the camera.
 - **Arrow buttons / arrow keys:** hold to glide; movement accelerates the longer you hold.
 - **On the preview:** drag to aim (or to move the digital crop when zoomed), double-click to centre a spot, scroll to zoom.
-- **Motor speed:** how fast the camera turns (1–240 °/s, default 60) – slow for smooth moves on a live stream, fast to snap to a preset. The camera's own tracking uses it too, so keep it high if tracking loses you when you walk.
+- **Pan speed / Tilt speed:** how fast the camera turns sideways and up/down (1–240 °/s, default 60) – slow for smooth moves on a live stream, fast to snap to a preset. The camera's own tracking uses them too: raise *Tilt speed* if it loses you when you stand up or sit down, *Pan speed* if it loses you when you walk. PixyDeck sets them again if the camera falls back to its own speed.
 - **Zoom slider (1×–4×):** uses the PIXY's hardware zoom (up to 1.5×) where the video mode supports it – below 1080p and at 1080p30 – and digital zoom beyond.
 - **Presets 1–4:** click an empty slot to store the current position, a filled one to recall it; right-click for more.
 - **Startup position** (folded): where the camera goes when PixyDeck starts; **Save as camera power-on position** stores the current pan/tilt in the camera itself, so it starts there even without PixyDeck or on another computer.
