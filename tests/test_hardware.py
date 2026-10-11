@@ -22,13 +22,27 @@ HID = backend.find_hidraw_device() if ENABLED else None
 VIDEO = backend.find_video_device() if ENABLED else None
 
 
+def eventually(read, expected, timeout=1.5):
+    """Read back until the camera reports ``expected``.
+
+    The PIXY applies settings asynchronously, and a running PixyDeck polls
+    the same HID node every few seconds, so one early read can miss.
+    """
+    deadline = time.monotonic() + timeout
+    value = read()
+    while value != expected and time.monotonic() < deadline:
+        time.sleep(0.1)
+        value = read()
+    return value
+
+
 @unittest.skipUnless(ENABLED and HID, "set PIXYDECK_HARDWARE=1 with a PIXY attached")
 class HardwareTest(unittest.TestCase):
     def test_state_answers_every_query(self):
-        state = backend.read_state(HID)
-        for key in ("audio", "gesture", "focus", "hflip", "target", "pan-speed", "tilt-speed",
-                    "white-balance-lock", "exposure-lock", "focus-lock"):
-            self.assertIn(key, state)
+        keys = {"audio", "gesture", "focus", "hflip", "target", "pan-speed", "tilt-speed",
+                "white-balance-lock", "exposure-lock", "focus-lock"}
+        missing = eventually(lambda: keys - backend.read_state(HID).keys(), set())
+        self.assertEqual(missing, set())
 
     def test_motor_speed_roundtrip(self):
         for axis in backend.MOTOR_AXES:
@@ -36,12 +50,10 @@ class HardwareTest(unittest.TestCase):
             self.assertIsNotNone(before)
             try:
                 backend.set_motor_speed(HID, axis, 37)
-                time.sleep(0.2)
-                self.assertEqual(backend.get_motor_speed(HID, axis), 37.0)
+                self.assertEqual(eventually(lambda: backend.get_motor_speed(HID, axis), 37.0), 37.0)
             finally:
                 backend.set_motor_speed(HID, axis, before)
-                time.sleep(0.2)
-            self.assertEqual(backend.get_motor_speed(HID, axis), before)
+            self.assertEqual(eventually(lambda: backend.get_motor_speed(HID, axis), before), before)
 
     def test_target_track_roundtrip(self):
         before = backend.get_target_track(HID)
@@ -49,8 +61,7 @@ class HardwareTest(unittest.TestCase):
         try:
             for name, code in backend.TARGET_TRACK_MODES.items():
                 backend.set_target_track(HID, code)
-                time.sleep(0.3)
-                self.assertEqual(backend.get_target_track(HID), name)
+                self.assertEqual(eventually(lambda: backend.get_target_track(HID), name), name)
         finally:
             backend.set_target_track(HID, backend.TARGET_TRACK_MODES[before])
 
@@ -60,12 +71,10 @@ class HardwareTest(unittest.TestCase):
             self.assertIsNotNone(before)
             try:
                 backend.set_lock(HID, name, not before)
-                time.sleep(0.2)
-                self.assertEqual(backend.get_lock(HID, name), not before)
+                self.assertEqual(eventually(lambda: backend.get_lock(HID, name), not before), not before)
             finally:
                 backend.set_lock(HID, name, before)
-                time.sleep(0.2)
-            self.assertEqual(backend.get_lock(HID, name), before)
+            self.assertEqual(eventually(lambda: backend.get_lock(HID, name), before), before)
 
     @unittest.skipUnless(VIDEO, "video node not found")
     def test_motor_position_matches_v4l2(self):
