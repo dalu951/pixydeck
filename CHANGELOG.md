@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 - 2026-10-11
 
 - **The virtual camera is now called “EMEET PIXY (PixyDeck)”**, so apps list it next to the real camera. A device with the old name “PixyDeck Virtual Camera” keeps working and is renamed the next time it is created (reboot, or Setup → Virtual camera → Fix while no app uses it)
 - **Tidier window**: six task tabs (Camera, Tracking, Image, Effects, Calls, Output); rarely used settings in folded cards; long explanations moved to tooltips; the last tab and open cards are remembered

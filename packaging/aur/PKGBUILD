@@ -1,6 +1,6 @@
 # Maintainer: dalu951 <https://github.com/dalu951>
 pkgname=pixydeck
-pkgver=0.4.1
+pkgver=0.5.0
 pkgrel=1
 pkgdesc="EMEET PixyDeck: Linux control suite for the EMEET PIXY webcam – PTZ, AI focus, auto-framing, AI background, virtual camera (unofficial)"
 arch=('any')
