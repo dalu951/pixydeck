@@ -3,6 +3,11 @@
 ## Unreleased
 
 - **Call detection** (AI & Privacy tab → *Calls*): when another app opens the PIXY or the virtual camera, tracking turns on; after the call the lens turns away. Optional: use the PIXY microphone as the default input during calls and switch back afterwards. Brief device probes by browsers are ignored (debounced)
+- **Virtual camera waiting screen**: while PixyDeck has no camera picture (another app holds the PIXY, or it is unplugged) the virtual camera shows a still, so Meet, WhatsApp or Teams can still select it; the real picture follows as soon as the camera is free
+- **Start the virtual camera with PixyDeck** (Output tab)
+- At a call start, a hint when the app reads the PIXY directly and so misses the effects
+- The camera is retried while the processed virtual camera runs, not only in preview
+- Timers no longer fire into a closed window
 - Tests: the GUI test harness can no longer run real `pactl` commands
 
 ## 0.4.1 - 2026-10-11

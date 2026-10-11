@@ -14,7 +14,7 @@ from . import VIRTUAL_CAMERA_NAME
 from .backend import find_video_by_name
 from .constants import PREVIEW, RELEASED, VIRTUAL_DIRECT, VIRTUAL_PROCESSED
 from .vision import vision_available
-from .widgets import Card, Segmented, SettingRow, set_state
+from .widgets import Card, Segmented, SettingRow, ToggleSwitch, set_state
 
 
 FFMPEG = shutil.which("ffmpeg")
@@ -56,6 +56,12 @@ class VirtualCameraMixin:
         buttons.addWidget(self.virtual_start)
         buttons.addWidget(self.virtual_stop)
         virtual.body.addLayout(buttons)
+        self.virtual_autostart = ToggleSwitch()
+        self.virtual_autostart.toggled.connect(lambda v: self.settings.setValue("virtual/autostart", v))
+        virtual.body.addWidget(SettingRow(
+            "Start with PixyDeck", self.virtual_autostart,
+            "Keeps “PixyDeck Virtual Camera” available, so Meet, WhatsApp or Teams can stay set to it. "
+            "While PixyDeck has no camera picture it shows a waiting screen."))
         self.virtual_device_status = QLabel("Device: checking…", objectName="subtle")
         self.virtual_status = QLabel("Pipeline: stopped", objectName="subtle")
         virtual.body.addWidget(self.virtual_device_status)
@@ -98,6 +104,10 @@ class VirtualCameraMixin:
             self.virtual_device_status.setText("Device: missing – open ⚙ Setup to create it")
         processed_ok = self.virtual_mode.current() != VIRTUAL_PROCESSED or vision_available()
         self.virtual_start.setEnabled(bool(device) and bool(FFMPEG) and not running and processed_ok)
+
+    def autostart_virtual_camera(self) -> None:
+        if self.virtual_autostart.isChecked() and not self.virtual_running:
+            self.start_virtual_camera()
 
     def start_virtual_camera(self) -> None:
         if self.virtual_running:
@@ -154,7 +164,7 @@ class VirtualCameraMixin:
         process.errorOccurred.connect(self.virtual_process_error)
         self.virtual_process = process
         # Give Qt a moment to fully release the physical device.
-        QTimer.singleShot(350, process.start)
+        QTimer.singleShot(350, process, process.start)
         self.virtual_status.setText(f"Pipeline: direct – {resolution.replace('x', ' × ')} @ {fps} fps")
         self.on_virtual_started()
 
@@ -190,7 +200,7 @@ class VirtualCameraMixin:
             if self.mode_before_virtual == RELEASED:
                 self.toggle_release()  # PREVIEW -> RELEASED, stops our stream
             elif was_direct:
-                QTimer.singleShot(300, lambda: (self.start_camera(), self.update_mode_ui()))
+                QTimer.singleShot(300, self, lambda: (self.start_camera(), self.update_mode_ui()))
         self.update_virtual_mode_ui()
         self.refresh_virtual_device()
         self.update_mode_ui()

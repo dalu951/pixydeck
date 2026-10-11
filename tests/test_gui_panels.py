@@ -23,8 +23,8 @@ from pixydeck import (backend, background_panel, constants, controls, gui, prese
 REAL_PIXY_VIDEO_NODES = privacy.pixy_video_nodes
 
 
-def run_now(_msec, fn):
-    fn()
+def run_now(_msec, *args):
+    args[-1]()  # singleShot(msec, fn) or singleShot(msec, context, fn)
 
 
 def synthetic_image(path, color=QColor(10, 120, 200)):

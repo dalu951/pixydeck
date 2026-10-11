@@ -204,6 +204,8 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         self.start_camera()
         self.refresh_virtual_device()
         self.update_mode_ui()
+        # After the camera state is restored, so the pipeline starts with it.
+        QTimer.singleShot(1500, self, self.autostart_virtual_camera)
 
         self.crop_timer = QTimer(self, interval=16)
         self.crop_timer.timeout.connect(self.crop_tick)
@@ -227,8 +229,8 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         self.state_timer.start()
 
         # Let USB/video startup settle before restoring the camera state.
-        QTimer.singleShot(600, self.restore_camera_state)
-        QTimer.singleShot(1500, self.check_setup)
+        QTimer.singleShot(600, self, self.restore_camera_state)
+        QTimer.singleShot(1500, self, self.check_setup)
 
     # ------------------------------------------------------------------
     # UI construction
@@ -469,6 +471,7 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         self.privacy_minutes.setValue(self.int_setting("privacy/minutes", 10))
         self.privacy_wake.set_silently(self.bool_setting("privacy/wake", True))
         self.privacy_mic.set_silently(self.bool_setting("privacy/mute_mic") and bool(PACTL))
+        self.virtual_autostart.set_silently(self.bool_setting("virtual/autostart"))
         self.calls_enabled.set_silently(self.bool_setting("calls/enabled"))
         start = str(self.settings.value("calls/start", "track"))
         self.calls_start.set_current(start if start in ("track", "keep") else "track")
@@ -650,7 +653,7 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         if device is None:
             self.device_label.setText("Camera not found")
             self.show_info("🔌", "EMEET PIXY not found", "Connect the camera; the preview starts automatically.")
-            QTimer.singleShot(3000, self.retry_camera)
+            QTimer.singleShot(3000, self, self.retry_camera)
             return
         self.device_label.setText(device.description())
         if not self.camera_formats:
@@ -699,7 +702,10 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         if not streaming or self.recovering or time.monotonic() - self.last_frame_at < 3.0:
             return
         self.recovering = True
-        self.notify("Camera stream stalled – restarting it", 5000)
+        if self.processor.showing_placeholder:
+            self.notify("Waiting for the camera – another app may be using the PIXY directly", 5000)
+        else:
+            self.notify("Camera stream stalled – restarting it", 5000)
         self.stop_camera()
 
         def restart() -> None:
@@ -708,10 +714,10 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
                 self.start_camera()
 
         # Let Qt finish releasing the device before reopening it.
-        QTimer.singleShot(600, restart)
+        QTimer.singleShot(600, self, restart)
 
     def retry_camera(self) -> None:
-        if self.camera is None and self.mode == PREVIEW:
+        if self.camera is None and self.streams_frames:
             self.start_camera()
             self.update_mode_ui()
 
@@ -949,7 +955,7 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         if self.move_dir == [0, 0]:
             self.move_timer.stop()
             self.pad.target = None
-            QTimer.singleShot(400, self.poll_position)
+            QTimer.singleShot(400, self, self.poll_position)
 
     def move_tick(self) -> None:
         held = time.monotonic() - self.move_started

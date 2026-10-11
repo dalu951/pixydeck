@@ -232,5 +232,76 @@ class CallsWindowTest(GuiTestCase):
         self.assertEqual(self.window.calls_start.current(), "track")
 
 
+    def test_effects_bypassed_by_a_direct_app_are_pointed_out(self):
+        w = self.window
+        with mock.patch.object(type(w.processor), "background_active", new_callable=mock.PropertyMock,
+                               return_value=True), \
+                mock.patch.object(privacy, "camera_users", return_value=[(9, "whatsapp")]), \
+                mock.patch.object(privacy, "physical_pixy_nodes", return_value=["/dev/video0"]):
+            self.start_call()
+            self.assertTrue(self.settle(lambda: "whatsapp reads the PIXY directly"
+                                        in w.statusBar().currentMessage()))
+
+    def test_no_hint_when_the_app_uses_the_virtual_camera(self):
+        w = self.window
+        with mock.patch.object(type(w.processor), "background_active", new_callable=mock.PropertyMock,
+                               return_value=True), \
+                mock.patch.object(privacy, "camera_users", return_value=[]):
+            with mock.patch.object(w, "notify") as notify:
+                self.start_call()
+                self.settle(lambda: False, timeout=0.3)
+        messages = " ".join(c.args[0] for c in notify.call_args_list)
+        self.assertIn("Call started", messages)
+        self.assertNotIn("reads the PIXY directly", messages)
+
+    def test_no_hint_without_effects(self):
+        w = self.window
+        with mock.patch.object(w.worker, "submit", wraps=w.worker.submit) as submit:
+            self.start_call()
+        self.assertNotIn("call-direct", [c.kwargs.get("key") for c in submit.call_args_list])
+
+
+class VirtualAutostartTest(GuiTestCase):
+    def test_autostart_starts_once(self):
+        w = self.window
+        w.virtual_autostart.setChecked(True)
+        with mock.patch.object(w, "start_virtual_camera") as start:
+            w.autostart_virtual_camera()
+        start.assert_called_once()
+        self.assertTrue(QSettings("pixydeck", "pixydeck").value("virtual/autostart", type=bool))
+
+    def test_autostart_off_or_already_running(self):
+        w = self.window
+        with mock.patch.object(w, "start_virtual_camera") as start:
+            w.autostart_virtual_camera()
+            w.virtual_autostart.setChecked(True)
+            w.mode = gui.VIRTUAL_PROCESSED
+            w.autostart_virtual_camera()
+        start.assert_not_called()
+
+    def test_setting_is_restored(self):
+        QSettings("pixydeck", "pixydeck").setValue("virtual/autostart", True)
+        self.close_window()
+        self.window = gui.PixyGUI()
+        self.controller = self.window.controller
+        self.assertTrue(self.window.virtual_autostart.isChecked())
+
+    def test_camera_retry_also_while_the_virtual_camera_runs(self):
+        w = self.window
+        w.camera = None
+        w.mode = gui.VIRTUAL_PROCESSED
+        with mock.patch.object(w, "start_camera") as start:
+            w.retry_camera()
+        start.assert_called_once()
+
+    def test_watchdog_explains_a_held_camera(self):
+        w = self.window
+        w.last_frame_at = 0
+        with mock.patch.object(type(w.processor), "showing_placeholder", new_callable=mock.PropertyMock,
+                               return_value=True), mock.patch.object(w, "notify") as notify:
+            w.check_frames()
+        self.assertIn("another app may be using the PIXY", notify.call_args.args[0])
+
+
 if __name__ == "__main__":
     unittest.main()

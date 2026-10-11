@@ -484,5 +484,24 @@ class OutputWatchTest(unittest.TestCase):
         self.assertEqual(self.errors, [])
 
 
+
+class PlaceholderFrameTest(unittest.TestCase):
+    def test_size_and_look(self):
+        from pixydeck.vision import placeholder_frame
+        width, height = 320, 180
+        data = placeholder_frame(width, height)
+        self.assertEqual(len(data), width * height * 3 // 2)
+        luma = np.frombuffer(data[:width * height], np.uint8).reshape(height, width)
+        self.assertLess(luma.mean(), 60)                 # dark, calm background
+        self.assertGreater(luma[60:120].max(), 150)      # but readable text
+        self.assertIs(placeholder_frame(width, height), data)  # cached
+
+    def test_without_opencv_still_valid_i420(self):
+        from pixydeck import vision
+        with mock.patch.object(vision, "cv2", None):
+            data = vision.placeholder_frame.__wrapped__(64, 36)
+        self.assertEqual(len(data), 64 * 36 * 3 // 2)
+
+
 if __name__ == "__main__":
     unittest.main()

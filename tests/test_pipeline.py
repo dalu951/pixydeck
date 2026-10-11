@@ -259,6 +259,26 @@ class OutputPipelineTest(PipelineTestCase):
             last = self.written()
             self.wait_until(lambda: False, 0.15)
 
+    def test_waiting_screen_keeps_the_virtual_camera_alive(self):
+        stats = []
+        self.processor.output_stats.connect(stats.append)
+        self.start()
+        self.assertTrue(self.wait_until(lambda: self.written() >= 2 * self.FRAME, 3.0))
+        self.assertTrue(self.processor.showing_placeholder)
+        self.assertEqual(self.written() % self.FRAME, 0)
+        self.assertIn(0.0, stats)
+
+    def test_camera_frames_replace_the_waiting_screen(self):
+        self.start()
+        self.assertTrue(self.wait_until(lambda: self.processor.showing_placeholder, 3.0))
+        self.feed(encode(split_frame()), 5)
+        self.assertFalse(self.processor.showing_placeholder)
+
+    def test_no_waiting_screen_without_output(self):
+        self.processor.set_stabilization(True)
+        self.wait_until(lambda: False, 1.5)
+        self.assertFalse(self.processor.showing_placeholder)
+
     def test_written_stream_is_whole_yuv420_frames(self):
         self.start()
         self.feed(encode(split_frame()), 10)

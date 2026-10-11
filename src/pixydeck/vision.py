@@ -21,6 +21,7 @@ import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 try:
@@ -216,6 +217,31 @@ def shift_image(image, offset: tuple[float, float]):
                           borderMode=cv2.BORDER_REPLICATE)
 
 
+# The virtual camera gets a still when no camera frames arrive for a moment.
+PLACEHOLDER_AFTER = 1.0     # seconds without a frame
+PLACEHOLDER_INTERVAL = 0.2  # repeat rate of the still (5 fps keeps apps happy)
+
+
+@lru_cache(maxsize=4)
+def placeholder_frame(width: int, height: int) -> bytes:
+    """A calm dark still saying PixyDeck is waiting, as I420 bytes."""
+    if cv2 is None:
+        return bytes([16]) * (width * height) + bytes([128]) * (width * height // 2)
+    image = np.full((height, width, 3), (24, 20, 17), np.uint8)
+    scale = height / 1080
+    for text, size, colour, y in (
+        ("EMEET PixyDeck", 2.0, (250, 160, 90), 0.46),
+        ("Waiting for the camera", 1.2, (225, 225, 225), 0.56),
+        ("Another app may be using the PIXY directly", 0.8, (150, 150, 150), 0.62),
+    ):
+        font_scale = size * scale
+        thickness = max(1, round(2 * scale * size / 1.2))
+        (w, _h), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+        cv2.putText(image, text, ((width - w) // 2, round(height * y)), cv2.FONT_HERSHEY_SIMPLEX,
+                    font_scale, colour, thickness, cv2.LINE_AA)
+    return cv2.cvtColor(image, cv2.COLOR_BGR2YUV_I420).tobytes()
+
+
 class FrameProcessor(QObject):
     """Background thread: face detection + processed virtual camera."""
 
@@ -234,6 +260,7 @@ class FrameProcessor(QObject):
         self._crop = Crop()
         self._output: subprocess.Popen | None = None
         self._output_lock = threading.Lock()
+        self._placeholder = False
         self._output_size = (1280, 720)
         self._detector = None
         self._last_detect = 0.0
@@ -465,8 +492,24 @@ class FrameProcessor(QObject):
 
     def _write_loop(self) -> None:
         frames, window_start = 0, time.monotonic()
+        last_write = time.monotonic()
         while True:
-            item = self._rendered.get()
+            try:
+                item = self._rendered.get(timeout=PLACEHOLDER_INTERVAL)
+            except queue.Empty:
+                # No camera frames (another app holds the PIXY, or it is
+                # unplugged): keep the virtual camera alive with a still so
+                # apps can still select it.
+                process = self._output
+                if process is not None and time.monotonic() - last_write >= PLACEHOLDER_AFTER:
+                    try:
+                        process.stdin.write(placeholder_frame(*self._output_size))
+                    except (BrokenPipeError, OSError, ValueError):
+                        pass
+                    if not self._placeholder:
+                        self._placeholder = True
+                        self.output_stats.emit(0.0)
+                continue
             if item is None:
                 return
             process, future = item
@@ -490,11 +533,18 @@ class FrameProcessor(QObject):
             except (BrokenPipeError, OSError, ValueError):
                 # FFmpeg is gone; _watch_output reports it with its stderr.
                 continue
+            last_write = time.monotonic()
+            self._placeholder = False
             frames += 1
             now = time.monotonic()
             if now - window_start >= 1.0:
                 self.output_stats.emit(frames / (now - window_start))
                 frames, window_start = 0, now
+
+    @property
+    def showing_placeholder(self) -> bool:
+        """True while the virtual camera shows the waiting still."""
+        return self._placeholder and self._output is not None
 
     def _run_detection(self, image) -> None:
         if image is None:

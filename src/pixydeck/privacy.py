@@ -21,6 +21,12 @@ def pixy_video_nodes() -> list[str]:
     return [device for device, name in video_nodes() if "PIXY" in name.upper()]
 
 
+def physical_pixy_nodes() -> list[str]:
+    """Only the real camera – an app here bypasses PixyDeck's effects."""
+    return [device for device, name in video_nodes()
+            if "PIXY" in name.upper() and "VIRTUAL" not in name.upper()]
+
+
 def set_pixy_microphone_muted(muted: bool) -> bool:
     """Mute/unmute the PIXY microphone through PipeWire/PulseAudio."""
     if not PACTL:
@@ -169,6 +175,20 @@ class PrivacyMixin:
         if self.calls_mic.isChecked():
             self.worker.submit(self.switch_to_pixy_microphone, key="call-mic")
         self.notify(f"Call started – {apps}", 6000)
+        if self.effects_active():
+            self.worker.submit(camera_users, physical_pixy_nodes(), self.own_pids(),
+                               key="call-direct", done=self.warn_effects_bypassed)
+
+    def effects_active(self) -> bool:
+        return (self.processor.background_active or self.processor.stabilizing
+                or self.autoframe.isChecked())
+
+    def warn_effects_bypassed(self, users: list[tuple[int, str]]) -> None:
+        if not users:
+            return
+        apps = ", ".join(sorted({name for _pid, name in users}))
+        self.notify(f"{apps} reads the PIXY directly and does not see your effects – "
+                    f"choose “PixyDeck Virtual Camera” there", 15000)
 
     def on_call_ended(self) -> None:
         if self.calls_privacy.isChecked():

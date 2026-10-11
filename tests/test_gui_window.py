@@ -27,9 +27,9 @@ REAL_START_CAMERA = gui.PixyGUI.start_camera
 REAL_STOP_CAMERA = gui.PixyGUI.stop_camera
 
 
-def run_now(_msec, fn):
-    """Stand-in for QTimer.singleShot: run the callback immediately."""
-    fn()
+def run_now(_msec, *args):
+    """Stand-in for QTimer.singleShot(msec, [context,] fn): run the callback now."""
+    args[-1]()
 
 
 class FakeFormat:
@@ -573,7 +573,7 @@ class CameraLifecycleTest(WindowCase):
             REAL_START_CAMERA(w)
         self.assertEqual(w.device_label.text(), "Camera not found")
         self.assertIs(w.preview_stack.currentWidget(), w.info_panel)
-        self.assertEqual(later.call_args.args, (3000, w.retry_camera))
+        self.assertEqual(later.call_args.args, (3000, w, w.retry_camera))
 
     def test_retry_starts_camera_only_in_preview(self):
         w = self.window
@@ -626,7 +626,7 @@ class WatchdogTest(WindowCase):
         self.assertTrue(w.recovering)
         self.assertEqual(later.call_count, 1)
         w.toggle_release()  # user released meanwhile: do not grab the camera back
-        later.call_args.args[1]()
+        later.call_args.args[-1]()
         self.assertIsNone(w.camera)
 
     def test_healthy_or_released_stream_left_alone(self):
