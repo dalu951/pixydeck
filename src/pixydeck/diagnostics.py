@@ -39,15 +39,20 @@ def setup_logging(debug: bool | None = None) -> Path | None:
         debug = os.environ.get("PIXYDECK_DEBUG", "") not in ("", "0")
     root = logging.getLogger()
     root.setLevel(logging.DEBUG if debug else logging.INFO)
+    for old in [h for h in root.handlers if getattr(h, "_pixydeck", False)]:
+        root.removeHandler(old)  # a second call must not log every line twice
+        old.close()
     formatter = logging.Formatter("%(asctime)s %(levelname)-7s %(name)s: %(message)s")
     console = logging.StreamHandler()
     console.setFormatter(formatter)
+    console._pixydeck = True
     root.addHandler(console)
     path: Path | None = log_file()
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         handler = RotatingFileHandler(path, maxBytes=1_000_000, backupCount=3, encoding="utf-8")
         handler.setFormatter(formatter)
+        handler._pixydeck = True
         root.addHandler(handler)
     except OSError as exc:
         log.warning("cannot write log file %s: %s", path, exc)

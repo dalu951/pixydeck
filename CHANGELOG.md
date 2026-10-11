@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- **Motor speed** (1–240 °/s) for pan and tilt – slider on the Camera tab, `pixydeck-cli pan-speed`/`tilt-speed`; restored on start
+- **Tracking target**: *Auto*, *Face* or *Upper body* (`pixydeck-cli target`)
+- **Exposure, white-balance and focus locks** on the Image tab (`pixydeck-cli exposure-lock|wb-lock|focus-lock`)
+- **Camera power-on position**: store the current pan/tilt in the PIXY itself (`pixydeck-cli power-on-position save`)
+- `pixydeck-cli state` shows every on-board setting the camera reports
+- HID safety guard: power, factory-reset, firmware and SD-card commands are refused before they reach the camera
+- HID: a query on a node that reads EOF no longer spins forever
+- Setup: the polkit password prompt is no longer killed after 10 s (and then misreported as “cancelled”)
+- Green screen: leaving the picture in *Green screen* mode is reported once instead of every half second
+- Background tab: without the AI extra the “needs the AI extra” hint now stays visible instead of being blanked at startup
+- Logging: setting up logging twice no longer writes every line twice
+- Tests: golden bytes for every HID command, a simulated PIXY over a pseudo terminal, fuzz/property tests, fake V4L2 driver, opt-in hardware suite (`PIXYDECK_HARDWARE=1`), coverage gate in CI
+
 ## 0.3.2 - 2026-10-11
 
 - Processed virtual camera: FFmpeg's error output is drained and logged, and an FFmpeg exit is detected right away – PixyDeck shows the error and resets to *Virtual cam off* instead of staying “on” with a stale frame rate

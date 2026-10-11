@@ -57,7 +57,7 @@ from .privacy import PACTL, PrivacyMixin, set_pixy_microphone_muted
 from .setup import SetupDialog, needs_attention, run_checks
 from .virtual_camera import VirtualCameraMixin
 from .vision import Crop, FrameProcessor, Smoother, framing_target, vision_available
-from .widgets import Card, InfoPanel, PreviewView, PtzPad, SettingRow, THEME
+from .widgets import Card, InfoPanel, PreviewView, PtzPad, SettingRow, SliderRow, THEME
 from .worker import ControlWorker
 
 try:
@@ -360,6 +360,11 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         center.clicked.connect(self.center_camera)
         arrows.addWidget(center, 1, 1)
         aim.body.addLayout(arrows)
+        self.motor_speed = SliderRow(
+            "Motor speed", backend.MOTOR_SPEED_MIN, backend.MOTOR_SPEED_MAX, backend.MOTOR_SPEED_DEFAULT,
+            fmt=lambda v: f"{v}°/s")
+        self.motor_speed.value_changed.connect(self.set_motor_speed)
+        aim.body.addWidget(self.motor_speed)
         aim.body.addWidget(self.hint(
             "Arrow keys move · scroll on the preview zooms · drag or double-click the preview to aim"))
         layout.addWidget(aim)
@@ -385,6 +390,11 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
             self.startup_position.addItem(f"Preset {slot}", str(slot))
         self.startup_position.currentIndexChanged.connect(self.startup_position_changed)
         presets.body.addWidget(SettingRow("Position at startup", self.startup_position))
+        power_on = QPushButton("Save as camera power-on position")
+        power_on.setToolTip("The PIXY itself turns to the current position when it powers on – "
+                            "also without PixyDeck and on other computers")
+        power_on.clicked.connect(self.save_power_on_position)
+        presets.body.addWidget(power_on)
         layout.addWidget(presets)
         layout.addStretch()
         return page
@@ -442,6 +452,10 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         self.show_tracking_state()
         self.gesture.set_silently(self.bool_setting("camera/gesture"))
         self.audio.set_current(str(self.settings.value("camera/audio", "nc")))
+        target = str(self.settings.value("camera/target", "auto"))
+        self.target.set_current(target if target in backend.TARGET_TRACK_MODES else "auto")
+        self.motor_speed.set_value_silently(max(backend.MOTOR_SPEED_MIN, min(
+            backend.MOTOR_SPEED_MAX, self.int_setting("camera/motor_speed", backend.MOTOR_SPEED_DEFAULT))))
         self.flicker.set_current(str(self.settings.value("camera/flicker", "60")))
         self.framing.set_current(str(self.settings.value("ai/framing", "medium")))
         self.show_faces.set_silently(self.bool_setting("ai/show_faces") and vision_available())
@@ -495,6 +509,8 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         tracking = self.tracking_mode
         gesture = self.gesture.isChecked()
         audio = self.audio.current() or "nc"
+        target = self.target.current() or "auto"
+        speed = self.motor_speed.value()
         flicker = self.flicker.current() or "60"
         image = {}
         self.settings.beginGroup("image")
@@ -513,6 +529,9 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
             c.tracking(tracking)
             c.gesture(gesture)
             c.audio(audio)
+            c.target_track(target)
+            for axis in backend.MOTOR_AXES:
+                c.motor_speed(axis, speed)
             return True
 
         self.position = (pan, tilt)

@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -55,6 +56,341 @@ class ChecksTest(unittest.TestCase):
             ok, message = setup.run_fix("udev")
         self.assertFalse(ok)
         self.assertIn("Reinstall", message)
+
+
+class FakeSysfs:
+    """Redirects the absolute /sys paths setup.py reads into a temp dir."""
+
+    def __init__(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+
+    def add_usb(self, name, vendor=None, product=None):
+        device = self.root / "sys/bus/usb/devices" / name
+        device.mkdir(parents=True)
+        if vendor is not None:
+            (device / "idVendor").write_text(vendor + "\n")
+        if product is not None:
+            (device / "idProduct").write_text(product + "\n")
+
+    def path(self, value, *rest):
+        if str(value).startswith("/sys"):
+            return self.root / str(value).lstrip("/")
+        return Path(value, *rest)
+
+    def __enter__(self):
+        (self.root / "sys/bus/usb/devices").mkdir(parents=True)
+        self.patch = mock.patch.object(setup, "Path", side_effect=self.path)
+        self.patch.start()
+        return self
+
+    def __exit__(self, *exc):
+        self.patch.stop()
+        self.tmp.cleanup()
+
+
+class SystemProbeTest(unittest.TestCase):
+    def test_camera_connected_matches_vendor_and_product(self):
+        with FakeSysfs() as sysfs:
+            sysfs.add_usb("1-1", "046d", "0825")
+            sysfs.add_usb("1-2", "328f")  # no idProduct: unreadable, skipped
+            self.assertFalse(setup.camera_connected())
+            sysfs.add_usb("2-3", "328F", "00C0")
+            self.assertTrue(setup.camera_connected())
+
+    def test_loopback_module_loaded_skips_modinfo(self):
+        with FakeSysfs() as sysfs, mock.patch.object(setup, "_run") as run:
+            (sysfs.root / "sys/module/v4l2loopback").mkdir(parents=True)
+            self.assertTrue(setup.loopback_module_available())
+        run.assert_not_called()
+
+    def test_loopback_module_falls_back_to_modinfo(self):
+        with FakeSysfs(), mock.patch.object(setup, "_run") as run:
+            run.return_value = subprocess.CompletedProcess([], 0, "", "")
+            self.assertTrue(setup.loopback_module_available())
+            run.assert_called_once_with("modinfo", "v4l2loopback")
+            run.return_value = subprocess.CompletedProcess([], 1, "", "not found")
+            self.assertFalse(setup.loopback_module_available())
+
+    def test_video_group_membership(self):
+        user = setup.pwd.getpwuid(os.getuid()).pw_name
+        with mock.patch.object(setup.grp, "getgrnam", return_value=mock.Mock(gr_mem=["other", user])):
+            self.assertTrue(setup.user_listed_in_video_group())
+        with mock.patch.object(setup.grp, "getgrnam", return_value=mock.Mock(gr_mem=["other"])):
+            self.assertFalse(setup.user_listed_in_video_group())
+        with mock.patch.object(setup.grp, "getgrnam", side_effect=KeyError("video")):
+            self.assertFalse(setup.user_listed_in_video_group())
+
+    def test_virtual_camera_device_looks_up_by_name(self):
+        with mock.patch.object(setup.backend, "find_video_by_name", return_value="/dev/video42") as find:
+            self.assertEqual(setup.virtual_camera_device(), "/dev/video42")
+        find.assert_called_once_with(setup.VIRTUAL_CAMERA_NAME)
+
+    def test_helper_path_needs_executable_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plain, executable = Path(tmp, "a"), Path(tmp, "b")
+            plain.write_text("#!/bin/sh\n")
+            executable.write_text("#!/bin/sh\n")
+            executable.chmod(0o755)
+            with mock.patch.object(setup, "HELPER_PATHS", (Path(tmp, "missing"), plain)):
+                self.assertIsNone(setup.helper_path())
+            with mock.patch.object(setup, "HELPER_PATHS", (plain, executable)):
+                self.assertEqual(setup.helper_path(), executable)
+
+    def test_run_captures_output_with_timeout(self):
+        done = subprocess.CompletedProcess(["x"], 0, "out", "")
+        with mock.patch.object(setup.subprocess, "run", return_value=done) as run:
+            self.assertIs(setup._run("systemctl", "is-enabled", "x"), done)
+        args, kwargs = run.call_args
+        self.assertEqual(args, (("systemctl", "is-enabled", "x"),))
+        self.assertEqual(kwargs["timeout"], 10)
+        self.assertFalse(kwargs["check"])
+
+    def test_run_errors_are_not_mistaken_for_a_cancelled_prompt(self):
+        with mock.patch.object(setup.subprocess, "run", side_effect=FileNotFoundError("no systemctl")):
+            result = setup._run("systemctl")
+        self.assertEqual(result.returncode, setup.RUN_FAILED)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("no systemctl", result.stderr)
+        with mock.patch.object(setup.subprocess, "run", side_effect=subprocess.TimeoutExpired("x", 10)):
+            result = setup._run("systemctl")
+        self.assertEqual(result.returncode, setup.RUN_FAILED)
+        self.assertIn("timed out", result.stderr)
+
+
+class RunChecksTest(unittest.TestCase):
+    """run_checks for individual broken pieces, everything else healthy."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.rule = Path(self.tmp.name, "70-pixydeck.rules")
+        self.rule.write_text("# rule\n")
+
+    def checks(self, connected=True, hid="/dev/hidraw0", rule=True, module=True, device="/dev/video20",
+               enabled="enabled", denied=(), listed=False, ffmpeg=True, ai=True):
+        rules = (Path(self.tmp.name, "missing.rules"),) + ((self.rule,) if rule else ())
+        with mock.patch.multiple(
+                setup,
+                camera_connected=mock.Mock(return_value=connected),
+                virtual_camera_device=mock.Mock(return_value=device),
+                loopback_module_available=mock.Mock(return_value=module),
+                user_listed_in_video_group=mock.Mock(return_value=listed),
+                UDEV_RULES=rules), \
+                mock.patch.object(setup.backend, "find_hidraw_device", return_value=hid) as find_hid, \
+                mock.patch.object(setup.os, "access", side_effect=lambda path, mode: path not in denied), \
+                mock.patch.object(setup.shutil, "which", side_effect=lambda name: "/usr/bin/ffmpeg" if ffmpeg else None), \
+                mock.patch("pixydeck.vision.vision_available", return_value=ai), \
+                mock.patch("pixydeck.vision.matting_available", return_value=True), \
+                mock.patch.object(setup, "_run", return_value=subprocess.CompletedProcess([], 0, enabled + "\n", "")) as run:
+            result = {check.key: check for check in setup.run_checks()}
+        self.find_hid, self.run = find_hid, run
+        return result
+
+    def test_order_and_healthy_system(self):
+        checks = self.checks()
+        self.assertEqual(list(checks), ["camera", "hid", "module", "virtual", "group", "ffmpeg", "ai"])
+        self.assertTrue(all(check.ok for check in checks.values()))
+        self.assertFalse(setup.needs_attention(list(checks.values())))
+        self.assertEqual(checks["hid"].detail, "/dev/hidraw0 is accessible")
+        self.assertIn("/dev/video20", checks["virtual"].detail)
+        self.run.assert_called_once_with("systemctl", "is-enabled", setup.UNIT)
+
+    def test_disconnected_camera_skips_hid_lookup(self):
+        checks = self.checks(connected=False)
+        self.find_hid.assert_not_called()
+        self.assertTrue(checks["hid"].ok)
+        self.assertIsNone(checks["hid"].fix)
+        self.assertIn("once the camera is connected", checks["hid"].detail)
+        self.assertFalse(checks["camera"].ok)
+        self.assertFalse(setup.needs_attention(list(checks.values())))
+
+    def test_inaccessible_hid_with_rule_offers_udev_fix(self):
+        checks = self.checks(denied=("/dev/hidraw0",))
+        self.assertFalse(checks["hid"].ok)
+        self.assertEqual(checks["hid"].fix, "udev")
+        self.assertIsNone(checks["hid"].manual)
+        self.assertIn("/dev/hidraw0 is not accessible", checks["hid"].detail)
+
+    def test_missing_hidraw_node(self):
+        checks = self.checks(hid=None)
+        self.assertFalse(checks["hid"].ok)
+        self.assertEqual(checks["hid"].fix, "udev")
+        self.assertIn("The HID device is not accessible", checks["hid"].detail)
+
+    def test_missing_udev_rule_needs_reinstall(self):
+        checks = self.checks(denied=("/dev/hidraw0",), rule=False)
+        self.assertFalse(checks["hid"].ok)
+        self.assertIsNone(checks["hid"].fix)
+        self.assertIn("udev rule is not installed", checks["hid"].detail)
+        self.assertIn("Reinstall", checks["hid"].manual)
+
+    def test_missing_module_is_manual(self):
+        checks = self.checks(module=False, device=None)
+        self.assertFalse(checks["module"].ok)
+        self.assertIn(os.uname().release, checks["module"].detail)
+        self.assertIsNone(checks["module"].fix)
+        self.assertIsNone(checks["virtual"].fix)
+        self.assertIn("does not exist yet", checks["virtual"].detail)
+
+    def test_service_not_enabled_offers_virtual_camera_fix(self):
+        checks = self.checks(enabled="disabled")
+        self.assertFalse(checks["virtual"].ok)
+        self.assertEqual(checks["virtual"].fix, "virtual-camera")
+        self.assertIn("not started at boot", checks["virtual"].detail)
+        self.assertTrue(setup.needs_attention(list(checks.values())))
+
+    def test_group_check_waits_for_device(self):
+        checks = self.checks(device=None)
+        self.assertTrue(checks["group"].ok)
+        self.assertIn("once the virtual camera exists", checks["group"].detail)
+
+    def test_unwritable_device_offers_video_group_fix(self):
+        checks = self.checks(denied=("/dev/video20",))
+        self.assertFalse(checks["group"].ok)
+        self.assertEqual(checks["group"].fix, "video-group")
+        self.assertIn("needs to be in the 'video' group", checks["group"].detail)
+
+    def test_already_listed_user_must_relogin(self):
+        checks = self.checks(denied=("/dev/video20",), listed=True)
+        self.assertFalse(checks["group"].ok)
+        self.assertIsNone(checks["group"].fix)
+        self.assertIn("log out and back in", checks["group"].detail)
+
+    def test_missing_ffmpeg_and_ai(self):
+        checks = self.checks(ffmpeg=False, ai=False)
+        self.assertFalse(checks["ffmpeg"].ok)
+        self.assertIn("ffmpeg", checks["ffmpeg"].manual)
+        self.assertFalse(checks["ai"].ok)
+        self.assertFalse(checks["ai"].required)
+        self.assertIn("pixydeck[ai]", checks["ai"].manual)
+        # ffmpeg is required, the AI extras are not.
+        self.assertTrue(setup.needs_attention([checks["ffmpeg"]]))
+        self.assertFalse(setup.needs_attention([checks["ai"]]))
+
+
+class RunFixTest(unittest.TestCase):
+    HELPER = Path("/usr/lib/pixydeck/pixydeck-setup")
+
+    def fix(self, action="udev", returncode=0, stdout="", stderr="", pkexec="/usr/bin/pkexec"):
+        result = subprocess.CompletedProcess([], returncode, stdout, stderr)
+        with mock.patch.object(setup, "helper_path", return_value=self.HELPER), \
+                mock.patch.object(setup.shutil, "which", return_value=pkexec), \
+                mock.patch.object(setup, "_run", return_value=result) as run:
+            outcome = setup.run_fix(action)
+        self.run = run
+        return outcome
+
+    def test_success_runs_fixed_action_through_pkexec(self):
+        self.assertEqual(self.fix("virtual-camera"), (True, "Done."))
+        self.run.assert_called_once_with("pkexec", str(self.HELPER), "virtual-camera", timeout=setup.FIX_TIMEOUT)
+
+    def test_slow_password_entry_is_not_cut_off(self):
+        self.assertGreaterEqual(setup.FIX_TIMEOUT, 120)
+
+    def test_pkexec_timeout_is_reported_as_such(self):
+        ok, message = self.fix(returncode=setup.RUN_FAILED, stderr="pkexec timed out after 600 s")
+        self.assertFalse(ok)
+        self.assertIn("timed out", message)
+
+    def test_without_pkexec_shows_manual_command(self):
+        ok, message = self.fix("video-group", pkexec=None)
+        self.assertFalse(ok)
+        self.assertIn(f"sudo {self.HELPER} video-group", message)
+        self.run.assert_not_called()
+
+    def test_cancelled_authorization(self):
+        for code in (126, 127):
+            self.assertEqual(self.fix(returncode=code), (False, "Authorization was cancelled."))
+
+    def test_failure_reports_helper_output(self):
+        self.assertEqual(self.fix(returncode=1, stderr="modprobe failed\n"), (False, "modprobe failed"))
+        self.assertEqual(self.fix(returncode=1, stdout=" partial \n"), (False, "partial"))
+        self.assertEqual(self.fix(returncode=3), (False, "Failed with exit code 3."))
+
+
+class SetupDialogTest(unittest.TestCase):
+    CHECKS = [
+        setup.Check("camera", "EMEET PIXY connected", False, "Plug in", required=False),
+        setup.Check("hid", "Camera controls", True, "/dev/hidraw0 is accessible"),
+        setup.Check("module", "v4l2loopback", False, "not installed", manual="Install v4l2loopback-dkms"),
+        setup.Check("virtual", "Virtual camera", False, "missing", fix="virtual-camera"),
+        setup.Check("group", "Permission", False, "needs group", fix="video-group"),
+    ]
+
+    @classmethod
+    def setUpClass(cls):
+        from PySide6.QtWidgets import QApplication
+        cls.app = QApplication.instance() or QApplication([])
+
+    def make_dialog(self):
+        patcher = mock.patch.object(setup, "run_checks", return_value=list(self.CHECKS))
+        self.run_checks = patcher.start()
+        self.addCleanup(patcher.stop)
+        dialog = setup.SetupDialog()
+        self.addCleanup(dialog.deleteLater)
+        return dialog
+
+    def rows(self, dialog):
+        return [dialog.rows.itemAt(i).widget() for i in range(dialog.rows.count())]
+
+    def labels(self, row):
+        from PySide6.QtWidgets import QLabel
+        return [label.text() for label in row.findChildren(QLabel)]
+
+    def fix_buttons(self, dialog):
+        from PySide6.QtWidgets import QPushButton
+        return {row: row.findChild(QPushButton) for row in self.rows(dialog)}
+
+    def test_renders_one_row_per_check(self):
+        dialog = self.make_dialog()
+        self.assertIn("setup", dialog.windowTitle())
+        rows = self.rows(dialog)
+        self.assertEqual(len(rows), len(self.CHECKS))
+        self.assertEqual([self.labels(row)[0] for row in rows], ["⚠️", "✅", "❌", "❌", "❌"])
+        self.assertIn("<b>Camera controls</b>", self.labels(rows[1]))
+        # Manual instructions are appended for failing checks without a fix.
+        self.assertIn("not installed<br>Install v4l2loopback-dkms", self.labels(rows[2]))
+
+    def test_fix_buttons_only_for_fixable_problems(self):
+        dialog = self.make_dialog()
+        buttons = list(self.fix_buttons(dialog).values())
+        self.assertEqual([button is not None for button in buttons], [False, False, False, True, True])
+        self.assertEqual(buttons[3].text(), "Fix")
+
+    def test_fix_button_runs_its_action_and_rechecks(self):
+        dialog = self.make_dialog()
+        button = list(self.fix_buttons(dialog).values())[3]
+        with mock.patch.object(setup, "run_fix", return_value=(True, "Done.")) as run_fix:
+            button.click()
+        run_fix.assert_called_once_with("virtual-camera")
+        self.assertEqual(dialog.status.text(), "✅ Done.")
+        self.assertEqual(self.run_checks.call_count, 2)
+        self.assertEqual(dialog.rows.count(), len(self.CHECKS))
+
+    def test_video_group_fix_explains_relogin(self):
+        dialog = self.make_dialog()
+        button = list(self.fix_buttons(dialog).values())[4]
+        with mock.patch.object(setup, "run_fix", return_value=(True, "Done.")) as run_fix:
+            button.click()
+        run_fix.assert_called_once_with("video-group")
+        self.assertIn("log out and back in", dialog.status.text())
+
+    def test_failed_fix_shows_error(self):
+        dialog = self.make_dialog()
+        button = list(self.fix_buttons(dialog).values())[3]
+        with mock.patch.object(setup, "run_fix", return_value=(False, "Authorization was cancelled.")):
+            button.click()
+        self.assertEqual(dialog.status.text(), "❌ Authorization was cancelled.")
+
+    def test_check_again_and_close(self):
+        from PySide6.QtWidgets import QPushButton
+        dialog = self.make_dialog()
+        buttons = {button.text(): button for button in dialog.findChildren(QPushButton)}
+        buttons["Check again"].click()
+        self.assertEqual(self.run_checks.call_count, 2)
+        buttons["Close"].click()
+        self.assertEqual(dialog.result(), setup.QDialog.Accepted)
 
 
 class HelperScriptTest(unittest.TestCase):

@@ -56,3 +56,11 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 pixydeck = ["assets/*.svg", "assets/*.onnx"]
+
+[tool.coverage.run]
+branch = true
+source = ["src/pixydeck"]
+
+[tool.coverage.report]
+skip_empty = true
+fail_under = 95

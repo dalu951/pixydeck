@@ -7,3 +7,8 @@ dist/
 venv/
 .pytest_cache/
 .DS_Store
+
+# coverage
+.coverage
+.coverage.*
+htmlcov/

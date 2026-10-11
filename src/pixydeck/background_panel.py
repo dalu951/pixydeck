@@ -15,6 +15,9 @@ from .vision import Background, matting_available, vision_available
 from .widgets import Card, Segmented, SliderRow
 
 
+NEEDS_AI = "Needs the optional AI extra: pip install 'pixydeck[ai]'"
+
+
 class BackgroundMixin:
     """Background replacement (green screen and AI matting) and its tab."""
 
@@ -75,7 +78,7 @@ class BackgroundMixin:
             for widget in (self.bg_mode, self.bg_fill, self.bg_color_button, self.bg_image_button,
                            self.bg_similarity, self.bg_smoothness, self.bg_spill, self.bg_blur):
                 widget.setEnabled(False)
-            self.bg_status.setText("Needs the optional AI extra: pip install 'pixydeck[ai]'")
+            self.bg_status.setText(NEEDS_AI)
         layout.addStretch()
         return page
 
@@ -131,7 +134,9 @@ class BackgroundMixin:
         self.bg_image_label.setText(f"Image: {name}" if self.bg_fill.current() == "image" else "")
         self.bg_blur.setVisible(self.bg_fill.current() == "blur")
         green = self.processor.key is not None
-        if mode == "off":
+        if not vision_available():
+            text = NEEDS_AI
+        elif mode == "off":
             text = ""
         elif mode in ("auto", "chroma") and green:
             text = "🟢 Green screen detected – keying it"

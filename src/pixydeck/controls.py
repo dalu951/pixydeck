@@ -19,6 +19,8 @@ from .widgets import Card, Segmented, SettingRow, SliderRow, ToggleSwitch, secti
 
 log = logging.getLogger(__name__)
 
+TARGET_LABELS = {"auto": "auto", "face": "face", "upper-body": "upper body"}
+
 
 def apply_controls(controller: PixyController, values: dict[str, int]) -> None:
     """Set picture controls, automatic modes first (the camera rejects manual
@@ -40,6 +42,10 @@ class ControlsMixin:
         self.tracking = Segmented([("Off", "idle"), ("Face tracking", "track"), ("Privacy", "privacy")])
         self.tracking.selected.connect(self.set_tracking_mode)
         onboard.body.addWidget(self.tracking)
+        onboard.body.addWidget(section_title("Tracking keeps in frame"))
+        self.target = Segmented([("Auto", "auto"), ("Face", "face"), ("Upper body", "upper-body")])
+        self.target.selected.connect(self.set_target)
+        onboard.body.addWidget(self.target)
         self.gesture = ToggleSwitch()
         self.gesture.toggled.connect(self.set_gesture)
         onboard.body.addWidget(SettingRow("Gesture control", self.gesture, "Hand gestures steer the camera"))
@@ -162,6 +168,22 @@ class ControlsMixin:
             self.feature_toggles[name] = toggle
         layout.addWidget(orientation)
 
+        locks = Card("Locks")
+        self.lock_toggles: dict[str, ToggleSwitch] = {}
+        for name, label in (
+            ("exposure", "Lock exposure"),
+            ("white-balance", "Lock white balance"),
+            ("focus", "Lock focus"),
+        ):
+            toggle = ToggleSwitch()
+            toggle.toggled.connect(lambda on, n=name: self.set_lock(n, on))
+            locks.body.addWidget(SettingRow(label, toggle))
+            self.lock_toggles[name] = toggle
+        locks.body.addWidget(self.hint(
+            "Freezes the camera's automatic adjustment at the current value, e.g. so the "
+            "picture does not pump when you lean in or hold something up."))
+        layout.addWidget(locks)
+
         power = Card("Anti-flicker")
         self.flicker = Segmented([("Off", "off"), ("50 Hz", "50"), ("60 Hz", "60")])
         self.flicker.selected.connect(self.set_flicker)
@@ -207,6 +229,32 @@ class ControlsMixin:
         self.settings.setValue("camera/audio", mode)
         self.worker.submit(self.controller.audio, mode, key="audio",
                            done=lambda _: self.notify("Microphone mode updated"))
+
+    def set_target(self, mode: str) -> None:
+        self.settings.setValue("camera/target", mode)
+        self.worker.submit(self.controller.target_track, mode, key="target",
+                           done=lambda _: self.notify(f"Tracking target: {TARGET_LABELS[mode]}"))
+
+    def set_motor_speed(self, speed: int) -> None:
+        self.settings.setValue("camera/motor_speed", speed)
+        for axis in backend.MOTOR_AXES:
+            self.worker.submit(self.controller.motor_speed, axis, speed, key=f"speed/{axis}")
+
+    def set_lock(self, name: str, locked: bool) -> None:
+        self.worker.submit(self.controller.lock, name, locked, key=f"lock/{name}")
+
+    def save_power_on_position(self) -> None:
+        def save():
+            self.controller.save_power_on_position()
+            return self.controller.power_on_position()
+
+        def done(position) -> None:
+            if position is None:
+                self.notify("The camera did not confirm the power-on position", 6000)
+            else:
+                self.notify(f"Camera powers on at pan {round(position[0])}°, tilt {round(position[1])}°")
+
+        self.worker.submit(save, key="power-on", done=done)
 
     def set_flicker(self, mode: str) -> None:
         self.settings.setValue("camera/flicker", mode)
@@ -261,6 +309,13 @@ class ControlsMixin:
         for name, toggle in self.feature_toggles.items():
             if name in state and state[name] != toggle.isChecked():
                 toggle.set_silently(state[name])
+        for name, toggle in self.lock_toggles.items():
+            locked = state.get(f"{name}-lock")
+            if locked is not None and locked != toggle.isChecked():
+                toggle.set_silently(locked)
+        if "target" in state and state["target"] != self.target.current():
+            self.target.set_current(state["target"])
+            self.settings.setValue("camera/target", state["target"])
         tracking = state.get("tracking")
         if time.monotonic() - self.tracking_changed_at < 4:
             tracking = None  # the camera reports our own change with a delay

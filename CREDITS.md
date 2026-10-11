@@ -12,7 +12,7 @@ The HID command families used by this project were documented through community 
 
 - rm1138 — `cam_ptz.sh`: https://gist.github.com/rm1138/ef132c3a39f3c1effabf6354e2eca965
 - branzo — fork/continued notes: https://gist.github.com/branzo/de238cfe001fa4a834ca21ac43dca580
-- LarsArtmann — `emeet-pixyd`: https://github.com/LarsArtmann/emeet-pixyd
+- LarsArtmann — `emeet-pixyd`: https://github.com/LarsArtmann/emeet-pixyd (its command table extracted from the official app pointed PixyDeck to motor speed, tracking target, power-on position and the lock commands; PixyDeck verified each head on hardware, where every command name turned out to belong to the head one row above it in that table)
 - Romonaga — `PixyPilot`: https://github.com/Romonaga/PixyPilot (focus/metering, feature toggles and query formats)
 
 The backend in this repository is an independently written implementation based on those publicly documented protocol facts and local testing. It does not copy the shell implementation from the gists.

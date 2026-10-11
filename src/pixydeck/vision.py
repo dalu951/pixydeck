@@ -241,6 +241,7 @@ class FrameProcessor(QObject):
         self._background = Background() if Background is not None else None
         self._last_green = 0.0
         self._key: tuple[float, float] | None = None
+        self._green_visible = False
         self._preview: QImage | None = None
         self._preview_pending = False
         self._preview_lock = threading.Lock()
@@ -348,6 +349,11 @@ class FrameProcessor(QObject):
                 log.warning("ffmpeg: %s", line)
                 tail = (tail + [line])[-5:]
         code = process.wait()
+        for stream in (process.stdin, process.stderr):
+            try:
+                stream.close()
+            except (OSError, ValueError):
+                pass  # the writer thread may be closing it too
         self._output_failed(process, " ".join(tail) or f"FFmpeg exited ({code})")
 
     def stop_output(self) -> None:
@@ -446,11 +452,15 @@ class FrameProcessor(QObject):
         if key is not None and self._key is not None:
             # Follow slow lighting changes without jitter.
             key = (self._key[0] * 0.8 + key[0] * 0.2, self._key[1] * 0.8 + key[1] * 0.2)
-        changed = (key is None) != (self._key is None)
+        # Report the screen entering or leaving the picture once. Chroma mode
+        # keeps the last key while it is out of view, so visibility is
+        # tracked on its own rather than derived from the key.
+        visible = key is not None
         if key is not None or background.mode == "auto":
             self._key = key
             background.key = key
-        if changed:
+        if visible != self._green_visible:
+            self._green_visible = visible
             self.green_screen.emit(key)
 
     def _write_loop(self) -> None:

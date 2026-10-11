@@ -63,6 +63,10 @@ def command_reference() -> str:
         ("`python tools/gen_docs.py`", "Regenerate AUTO-GENERATED doc sections"),
         ("`python tools/gen_docs.py --check`", "Fail if docs are stale (CI)"),
         ("`QT_QPA_PLATFORM=offscreen PYTHONPATH=src python -m unittest discover -s tests`", "Run the test suite"),
+        ("`python -m coverage run -m unittest discover -s tests && python -m coverage report`",
+         "Test suite with coverage (CI floor in `pyproject.toml`)"),
+        ("`PIXYDECK_HARDWARE=1 PYTHONPATH=src python -m unittest tests.test_hardware -v`",
+         "Round-trip checks on a connected PIXY"),
         ("`python -m pyflakes src tests`", "Lint"),
     ]
     return table(("Command", "Entry point / purpose"), rows)

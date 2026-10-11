@@ -11,14 +11,15 @@ The window has the live preview on the left and five tabs on the right. The head
 - **Pan/tilt pad:** click or drag to aim; the dot shows where the camera points. Tilt is limited to −52° … +90° because lower angles only park the camera.
 - **Arrow buttons / arrow keys:** hold to glide; movement accelerates the longer you hold.
 - **On the preview:** drag to aim (or to move the digital crop when zoomed), double-click to centre a spot, scroll to zoom.
+- **Motor speed:** how fast the camera turns (1–240 °/s, default 60) – slow for smooth moves on a live stream, fast to snap to a preset. Applies to tracking too.
 - **Zoom slider (1×–4×):** uses the PIXY's hardware zoom (up to 1.5×) where the video mode supports it – below 1080p and at 1080p30 – and digital zoom beyond.
-- **Presets 1–4:** click an empty slot to store the current position, a filled one to recall it; right-click for more. *Position at startup* chooses where the camera goes when PixyDeck starts.
+- **Presets 1–4:** click an empty slot to store the current position, a filled one to recall it; right-click for more. *Position at startup* chooses where the camera goes when PixyDeck starts. **Save as camera power-on position** stores the current pan/tilt in the camera itself, so it starts there even without PixyDeck or on another computer.
 
 ## AI & Privacy tab
 
 <img src="../media/ai.png" width="860" alt="AI and privacy tab">
 
-- **PIXY on-board AI:** *Off*, *Face tracking* (the camera follows you physically) or *Privacy* (the lens turns away). Gesture control and the microphone's DSP mode (noise cancel, live, original) are here too. Changes made by hand gestures appear in the app within about three seconds.
+- **PIXY on-board AI:** *Off*, *Face tracking* (the camera follows you physically) or *Privacy* (the lens turns away). *Tracking keeps in frame* chooses what the camera's tracking follows: *Auto*, *Face* or *Upper body*. Gesture control and the microphone's DSP mode (noise cancel, live, original) are here too. Changes made by hand gestures appear in the app within about three seconds.
 - **AI focus:** *Center*, *Face*, or *Click point* – then click anything in the preview, e.g. an object you hold up, and the PIXY's second lens focuses on it (yellow marker).
 - **Auto-framing (software):** digitally zooms and follows faces. *Wide*, *Medium*, *Tight* set how close; *Show detected faces* draws the detection boxes.
 - **Privacy timer:** enters privacy mode after the idle time, wakes up automatically as soon as another app (Zoom, Teams, Meet, OBS …) opens the camera, and can mute the PIXY microphone while in privacy. The timer pauses while the preview is visible.
@@ -27,7 +28,7 @@ The window has the live preview on the left and five tabs on the right. The head
 
 ## Image tab
 
-Brightness, contrast, saturation, hue, sharpness, gamma and gain; automatic or manual white balance, exposure and focus; backlight compensation; **stabilization** (*Steady picture*, uses an 8 % digital reserve to cancel shake); mirror, vertical flip and auto-rotate for upside-down mounting; anti-flicker (50/60 Hz). *Reset picture* restores the camera defaults.
+Brightness, contrast, saturation, hue, sharpness, gamma and gain; automatic or manual white balance, exposure and focus; backlight compensation; **stabilization** (*Steady picture*, uses an 8 % digital reserve to cancel shake); mirror, vertical flip and auto-rotate for upside-down mounting; **locks** that freeze automatic exposure, white balance or focus at the current value (so the picture does not pump when you lean in or hold something up); anti-flicker (50/60 Hz). *Reset picture* restores the camera defaults.
 
 ## Background tab
 
@@ -98,4 +99,12 @@ Fill with **blur**, a **gradient**, a **colour** or your own **image**. Effects 
 | `pixydeck-cli audio nc\|live\|org` | Microphone mode: noise cancel, live, original |
 | `pixydeck-cli auto-privacy SECONDS` | Camera-side auto-privacy delay (0 = off; experimental) |
 | `pixydeck-cli flicker off\|50\|60` | Anti-flicker frequency |
+| `pixydeck-cli target auto\|face\|upper-body` | What tracking keeps in frame |
+| `pixydeck-cli pan-speed [DEG/S]` | Show or set the pan motor speed (1…240) |
+| `pixydeck-cli tilt-speed [DEG/S]` | Show or set the tilt motor speed (1…240) |
+| `pixydeck-cli wb-lock on\|off` | Lock the white balance |
+| `pixydeck-cli exposure-lock on\|off` | Lock the exposure |
+| `pixydeck-cli focus-lock on\|off` | Lock the focus |
+| `pixydeck-cli power-on-position [show\|save]` | Show, or store the current pan/tilt as the camera's power-on position |
+| `pixydeck-cli state` | Show the camera's on-board settings |
 <!-- /AUTO-GENERATED:cli -->

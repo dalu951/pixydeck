@@ -85,6 +85,7 @@ def clamp(value: int, minimum: int, maximum: int) -> int:
 
 
 VIDEO_SYSFS = Path("/sys/class/video4linux")
+HIDRAW_SYSFS = Path("/sys/class/hidraw")
 
 
 def video_sort_key(path: Path) -> int:
@@ -108,9 +109,9 @@ def find_video_by_name(name: str, root: Path = VIDEO_SYSFS) -> str | None:
     return next((device for device, node_name in video_nodes(root) if node_name == name), None)
 
 
-def find_video_device() -> str | None:
+def find_video_device(root: Path = VIDEO_SYSFS) -> str | None:
     """Return the physical PIXY video node that exposes PTZ controls."""
-    for device, name in video_nodes():
+    for device, name in video_nodes(root):
         name = name.upper()
         if "EMEET" not in name or "PIXY" not in name or "VIRTUAL" in name:
             continue
@@ -124,9 +125,8 @@ def find_video_device() -> str | None:
     return None
 
 
-def find_hidraw_device() -> str | None:
+def find_hidraw_device(root: Path = HIDRAW_SYSFS) -> str | None:
     """Return the PIXY HID node by exact USB HID identity."""
-    root = Path("/sys/class/hidraw")
     if not root.exists():
         return None
     for dev_dir in sorted(root.glob("hidraw*")):
@@ -262,11 +262,63 @@ def set_control(device: str, control: str, value: int) -> None:
         raise PixyError(result.stderr.strip() or f"Unable to set {control}")
 
 
+# Report heads PixyDeck must never send, whatever a caller asks for: power
+# (reboot, auto shutdown), factory reset, device identity, firmware/RTC and
+# SD card. Device groups are matched on ``head[1] & 0x1F`` like the camera's
+# own router does (the motor MCU answers as 0x63).
+FORBIDDEN_GROUPS = {0x00, 0x09, 0x0A}
+FORBIDDEN_HEADS = {
+    (0x09, 0x01, 0x00, 0x05),  # factory reset
+    (0x09, 0x01, 0x00, 0x08),  # factory reset as named by the unshifted table
+    (0x09, 0x01, 0x00, 0x0D),  # set device version
+    (0x09, 0x01, 0x00, 0x0F),  # set device alias
+}
+
+
+def is_forbidden_head(data: bytes) -> bool:
+    if len(data) < 4:
+        return False
+    if data[0] == 0x07:  # legacy V1 commands are not used by PixyDeck
+        return True
+    head = (data[0], data[1] & 0x1F, data[2], data[3])
+    return head[1] in FORBIDDEN_GROUPS or head in FORBIDDEN_HEADS
+
+
 def build_hid_report(payload: Iterable[int]) -> bytes:
     data = bytes(payload)
     if len(data) > 32:
         raise PixyError("HID report is longer than 32 bytes")
+    if is_forbidden_head(data):
+        raise PixyError(f"Refusing HID command {data[:4].hex(' ')}")
     return data + bytes(32 - len(data))
+
+
+def hid_frame(head: Iterable[int], body: Iterable[int] = ()) -> list[int]:
+    """A V2 report: 4-byte head, then ``00 len 00 len`` and the payload.
+
+    A bare head (no body) is a query; replies use the same framing.
+    """
+    head, body = list(head), list(body)
+    if len(head) != 4:
+        raise PixyError("HID head must be 4 bytes")
+    if not body:
+        return head
+    if len(body) > 24:
+        raise PixyError("HID payload is longer than 24 bytes")
+    return [*head, 0x00, len(body), 0x00, len(body), *body]
+
+
+def reply_payload(reply: bytes | None, minimum: int = 1) -> bytes | None:
+    """Payload of a V2 reply (from offset 8), or None if it is too short.
+
+    The length bytes 5 and 7 are trusted only up to the bytes actually read.
+    """
+    if reply is None or len(reply) < 8 + minimum:
+        return None
+    length = min(reply[5], len(reply) - 8)
+    if length < minimum:
+        return None
+    return bytes(reply[8:8 + length])
 
 
 def send_hid_report(device: str, payload: Iterable[int]) -> None:
@@ -282,40 +334,76 @@ def send_hid_report(device: str, payload: Iterable[int]) -> None:
         raise PixyError(f"Unable to write to {device}: {exc}") from exc
 
 
+# V2 report heads, verified against a PIXY (328f:00c0) by sending each query
+# and checking the echoed head and payload. The command names come from the
+# official app's command table; note that in the community-extracted table
+# (github.com/LarsArtmann/emeet-pixyd, docs/hid-protocol-official-map.md)
+# every name sits one row below the head that carries it on the wire.
+HEAD_SET_DEVICE_MODE = (0x09, 0x01, 0x01, 0x00)     # [mode]
+HEAD_GET_DEVICE_MODE = (0x09, 0x01, 0x01, 0x01)
+HEAD_SET_PRIVACY_TRIGGER = (0x09, 0x02, 0x01, 0x00)  # [seconds:u32 LE]
+HEAD_GET_PRIVACY_TRIGGER = (0x09, 0x02, 0x01, 0x01)
+HEAD_GET_MOTOR_POS = (0x09, 0x03, 0x01, 0x01)        # [axis] -> [axis][target:f32][actual:f32]
+HEAD_SET_MOTOR_SPEED = (0x09, 0x03, 0x01, 0x02)      # [axis][deg/s:f32]
+HEAD_GET_MOTOR_SPEED = (0x09, 0x03, 0x01, 0x03)      # [axis] -> [axis][deg/s:f32][limit:f32]
+HEAD_SET_POWER_ON_POS = (0x09, 0x03, 0x01, 0x13)     # [mode][f32 x3]; mode 1 stores the current position
+HEAD_GET_POWER_ON_POS = (0x09, 0x03, 0x01, 0x14)     # -> [mode][pan:f32][tilt:f32][zoom:f32]
+HEAD_SET_FOCUS_MODE = (0x09, 0x04, 0x00, 0x01)       # [mode][x][y][w][h]
+HEAD_GET_FOCUS_MODE = (0x09, 0x04, 0x00, 0x02)
+HEAD_SET_METER_MODE = (0x09, 0x04, 0x00, 0x03)       # same body as focus
+HEAD_GET_FEATURE = (0x09, 0x04, 0x00, 0x07)          # [feature] -> [feature][on]
+HEAD_SET_FEATURE = (0x09, 0x04, 0x00, 0x08)          # [feature][on]
+HEAD_SET_TARGET_TRACK = (0x09, 0x04, 0x01, 0x00)     # [mode][f32 x5]
+HEAD_GET_TARGET_TRACK = (0x09, 0x04, 0x01, 0x01)
+HEAD_SET_GESTURE = (0x09, 0x04, 0x02, 0x00)          # [type][on]
+HEAD_GET_GESTURE = (0x09, 0x04, 0x02, 0x01)          # [type] -> [type][on]
+HEAD_SET_AUDIO = (0x09, 0x05, 0x00, 0x03)            # [mode]
+HEAD_GET_AUDIO = (0x09, 0x05, 0x00, 0x04)
+# Lock heads: (set, get), payload [on].
+LOCK_HEADS = {
+    "white-balance": ((0x09, 0x04, 0x00, 0x09), (0x09, 0x04, 0x00, 0x0A)),
+    "exposure": ((0x09, 0x04, 0x00, 0x0B), (0x09, 0x04, 0x00, 0x0C)),
+    "focus": ((0x09, 0x04, 0x00, 0x0D), (0x09, 0x04, 0x00, 0x0E)),
+}
+GESTURE_TYPE = 0x02
+MOTOR_AXES = {"pan": 0x01, "tilt": 0x02}
+# The firmware stores any speed; below ~1 deg/s a move takes minutes, and
+# above ~240 deg/s the motor does not get noticeably faster.
+MOTOR_SPEED_MIN = 1
+MOTOR_SPEED_MAX = 240
+MOTOR_SPEED_DEFAULT = 60
+# Smart-composition target; 3 (full body) is rejected by the PIXY firmware.
+TARGET_TRACK_MODES = {"auto": 0x00, "face": 0x01, "upper-body": 0x02}
+
+
 def set_tracking(device: str, mode: int) -> None:
     if mode not in (0x00, 0x01, 0x02):
         raise PixyError("Invalid tracking mode")
-    send_hid_report(device, [0x09, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, mode])
+    send_hid_report(device, hid_frame(HEAD_SET_DEVICE_MODE, [mode]))
     time.sleep(0.2)
-    send_hid_report(device, [0x09, 0x01, 0x01, 0x01])
+    send_hid_report(device, HEAD_GET_DEVICE_MODE)
 
 
 def set_gesture(device: str, enabled: bool) -> None:
     value = 0x01 if enabled else 0x00
-    send_hid_report(
-        device,
-        [0x09, 0x04, 0x02, 0x00, 0x00, 0x02, 0x00, 0x02, 0x02, value],
-    )
+    send_hid_report(device, hid_frame(HEAD_SET_GESTURE, [GESTURE_TYPE, value]))
     time.sleep(0.2)
-    send_hid_report(device, [0x09, 0x04, 0x02, 0x01, 0x00, 0x01, 0x00, 0x01, 0x02])
+    send_hid_report(device, hid_frame(HEAD_GET_GESTURE, [GESTURE_TYPE]))
 
 
 def set_audio_mode(device: str, mode: int) -> None:
     if mode not in (0x01, 0x02, 0x03):
         raise PixyError("Invalid audio mode")
-    send_hid_report(device, [0x09, 0x05, 0x00, 0x03, 0x00, 0x01, 0x00, 0x01, mode])
+    send_hid_report(device, hid_frame(HEAD_SET_AUDIO, [mode]))
     time.sleep(0.2)
-    send_hid_report(device, [0x09, 0x05, 0x00, 0x04])
+    send_hid_report(device, HEAD_GET_AUDIO)
 
 
 def set_auto_privacy(device: str, seconds: int) -> None:
     seconds = clamp(seconds, 0, 255)
-    send_hid_report(
-        device,
-        [0x09, 0x02, 0x01, 0x00, 0x00, 0x04, 0x00, 0x04, seconds],
-    )
+    send_hid_report(device, hid_frame(HEAD_SET_PRIVACY_TRIGGER, [seconds, 0, 0, 0]))
     time.sleep(0.2)
-    send_hid_report(device, [0x09, 0x02, 0x01, 0x01])
+    send_hid_report(device, HEAD_GET_PRIVACY_TRIGGER)
 
 TRACKING_MODES = {"idle": 0x00, "track": 0x01, "privacy": 0x02}
 AUDIO_MODES = {"nc": 0x01, "live": 0x02, "org": 0x03}
@@ -325,7 +413,10 @@ FOCUS_MODES = {"center": 0x00, "face": 0x01, "area": 0x02}
 FEATURES = {"hflip": 0x01, "vflip": 0x02, "autorotate": 0x04}
 
 
-def hid_query(device: str, payload: Iterable[int], timeout: float = 0.5) -> bytes | None:
+HID_TIMEOUT = 0.5  # seconds to wait for a reply
+
+
+def hid_query(device: str, payload: Iterable[int], timeout: float | None = None) -> bytes | None:
     """Send a report and return the camera's reply with the same head.
 
     The PIXY also pushes unsolicited state reports, so stale input is
@@ -338,13 +429,18 @@ def hid_query(device: str, payload: Iterable[int], timeout: float = 0.5) -> byte
     except OSError as exc:
         raise PixyError(f"Unable to open {device}: {exc}") from exc
     try:
-        while select.select([fd], [], [], 0)[0]:
+        # Bounded: a node that reports readable but returns nothing (EOF
+        # after an unplug) must not spin here forever.
+        for _ in range(64):
+            if not select.select([fd], [], [], 0)[0]:
+                break
             try:
-                os.read(fd, 64)
+                if not os.read(fd, 64):
+                    break
             except BlockingIOError:
                 break
         os.write(fd, build_hid_report(data))
-        deadline = time.monotonic() + timeout
+        deadline = time.monotonic() + (HID_TIMEOUT if timeout is None else timeout)
         while (remaining := deadline - time.monotonic()) > 0:
             if not select.select([fd], [], [], remaining)[0]:
                 break
@@ -364,15 +460,89 @@ def hid_query(device: str, payload: Iterable[int], timeout: float = 0.5) -> byte
 def set_focus_mode(device: str, mode: int, x: int = 0, y: int = 0) -> None:
     """Focus/metering mode; x/y (0..127, top-left origin) for the selected area."""
     body = [mode, clamp(x, 0, 0x7F), clamp(y, 0, 0x7F), 0x7F, 0x7F]
-    send_hid_report(device, [0x09, 0x04, 0x00, 0x01, 0x00, 0x05, 0x00, 0x05, *body])
-    send_hid_report(device, [0x09, 0x04, 0x00, 0x03, 0x00, 0x05, 0x00, 0x05, *body])
-    send_hid_report(device, [0x09, 0x04, 0x00, 0x02])
+    send_hid_report(device, hid_frame(HEAD_SET_FOCUS_MODE, body))
+    send_hid_report(device, hid_frame(HEAD_SET_METER_MODE, body))
+    send_hid_report(device, HEAD_GET_FOCUS_MODE)
 
 
 def set_feature(device: str, feature: int, enabled: bool) -> None:
-    send_hid_report(device, [0x09, 0x04, 0x00, 0x08, 0x00, 0x02, 0x00, 0x02, feature, int(enabled)])
+    send_hid_report(device, hid_frame(HEAD_SET_FEATURE, [feature, int(enabled)]))
     time.sleep(0.2)
-    send_hid_report(device, [0x09, 0x04, 0x00, 0x07, 0x00, 0x01, 0x00, 0x01, feature])
+    send_hid_report(device, hid_frame(HEAD_GET_FEATURE, [feature]))
+
+
+def _float(value: float) -> list[int]:
+    return list(struct.pack("<f", value))
+
+
+def motor_axis(axis: str) -> int:
+    if axis not in MOTOR_AXES:
+        raise PixyError("Motor axis must be " + " or ".join(MOTOR_AXES))
+    return MOTOR_AXES[axis]
+
+
+def get_motor_speed(device: str, axis: str) -> float | None:
+    """Pan or tilt speed in degrees per second."""
+    code = motor_axis(axis)
+    payload = reply_payload(hid_query(device, hid_frame(HEAD_GET_MOTOR_SPEED, [code])), 5)
+    if payload is None or payload[0] != code:
+        return None
+    return struct.unpack_from("<f", payload, 1)[0]
+
+
+def set_motor_speed(device: str, axis: str, degrees_per_second: float) -> float:
+    speed = float(min(max(degrees_per_second, MOTOR_SPEED_MIN), MOTOR_SPEED_MAX))
+    send_hid_report(device, hid_frame(HEAD_SET_MOTOR_SPEED, [motor_axis(axis), *_float(speed)]))
+    return speed
+
+
+def get_motor_position(device: str, axis: str) -> tuple[float, float] | None:
+    """(target, actual) angle in degrees as the motor controller sees it."""
+    code = motor_axis(axis)
+    payload = reply_payload(hid_query(device, hid_frame(HEAD_GET_MOTOR_POS, [code])), 9)
+    if payload is None or payload[0] != code:
+        return None
+    return struct.unpack_from("<ff", payload, 1)
+
+
+def set_target_track(device: str, mode: int) -> None:
+    if mode not in TARGET_TRACK_MODES.values():
+        raise PixyError("Invalid tracking target")
+    send_hid_report(device, hid_frame(HEAD_SET_TARGET_TRACK, [mode, *bytes(20)]))
+
+
+def get_target_track(device: str) -> str | None:
+    payload = reply_payload(hid_query(device, HEAD_GET_TARGET_TRACK))
+    names = {code: name for name, code in TARGET_TRACK_MODES.items()}
+    return names.get(payload[0]) if payload is not None else None
+
+
+def save_power_on_position(device: str) -> None:
+    """Make the camera's current pan/tilt its own power-on position.
+
+    The camera stores where it is now; the coordinates in the request are
+    ignored, so the caller moves the camera first.
+    """
+    send_hid_report(device, hid_frame(HEAD_SET_POWER_ON_POS, [0x01, *bytes(12)]))
+
+
+def get_power_on_position(device: str) -> tuple[float, float] | None:
+    """Stored power-on (pan, tilt) in degrees, or None if not stored."""
+    payload = reply_payload(hid_query(device, HEAD_GET_POWER_ON_POS), 13)
+    if payload is None or payload[0] != 0x01:
+        return None
+    return struct.unpack_from("<ff", payload, 1)
+
+
+def set_lock(device: str, name: str, locked: bool) -> None:
+    if name not in LOCK_HEADS:
+        raise PixyError("Lock must be " + ", ".join(LOCK_HEADS))
+    send_hid_report(device, hid_frame(LOCK_HEADS[name][0], [int(locked)]))
+
+
+def get_lock(device: str, name: str) -> bool | None:
+    payload = reply_payload(hid_query(device, LOCK_HEADS[name][1]))
+    return payload[0] == 1 if payload is not None else None
 
 
 def read_state(device: str) -> dict:
@@ -383,22 +553,33 @@ def read_state(device: str) -> dict:
     tracking, only privacy (0x02) is reliable.
     """
     state: dict = {}
-    reply = hid_query(device, [0x09, 0x01, 0x01, 0x01])
-    if reply is not None and reply[8] in (0, 1, 2):
-        state["tracking"] = {0: "idle", 1: "track", 2: "privacy"}[reply[8]]
-    reply = hid_query(device, [0x09, 0x05, 0x00, 0x04])
-    if reply is not None and reply[8] in (1, 2, 3):
-        state["audio"] = {1: "nc", 2: "live", 3: "org"}[reply[8]]
-    reply = hid_query(device, [0x09, 0x04, 0x02, 0x01, 0x00, 0x01, 0x00, 0x01, 0x02])
-    if reply is not None:
-        state["gesture"] = reply[9] == 1
-    reply = hid_query(device, [0x09, 0x04, 0x00, 0x02])
-    if reply is not None and reply[8] in (0, 1, 2):
-        state["focus"] = {0: "center", 1: "face", 2: "area"}[reply[8]]
+    payload = reply_payload(hid_query(device, HEAD_GET_DEVICE_MODE))
+    if payload is not None and payload[0] in (0, 1, 2):
+        state["tracking"] = {0: "idle", 1: "track", 2: "privacy"}[payload[0]]
+    payload = reply_payload(hid_query(device, HEAD_GET_AUDIO))
+    if payload is not None and payload[0] in (1, 2, 3):
+        state["audio"] = {1: "nc", 2: "live", 3: "org"}[payload[0]]
+    payload = reply_payload(hid_query(device, hid_frame(HEAD_GET_GESTURE, [GESTURE_TYPE])), 2)
+    if payload is not None:
+        state["gesture"] = payload[1] == 1
+    payload = reply_payload(hid_query(device, HEAD_GET_FOCUS_MODE))
+    if payload is not None and payload[0] in (0, 1, 2):
+        state["focus"] = {0: "center", 1: "face", 2: "area"}[payload[0]]
     for name, feature in FEATURES.items():
-        reply = hid_query(device, [0x09, 0x04, 0x00, 0x07, 0x00, 0x01, 0x00, 0x01, feature])
-        if reply is not None and reply[8] == feature:
-            state[name] = reply[9] == 1
+        payload = reply_payload(hid_query(device, hid_frame(HEAD_GET_FEATURE, [feature])), 2)
+        if payload is not None and payload[0] == feature:
+            state[name] = payload[1] == 1
+    target = get_target_track(device)
+    if target is not None:
+        state["target"] = target
+    for axis in MOTOR_AXES:
+        speed = get_motor_speed(device, axis)
+        if speed is not None:
+            state[f"{axis}-speed"] = round(speed)
+    for name in LOCK_HEADS:
+        locked = get_lock(device, name)
+        if locked is not None:
+            state[f"{name}-lock"] = locked
     return state
 
 
@@ -536,6 +717,21 @@ class PixyController:
     def feature(self, name: str, enabled: bool) -> None:
         set_feature(self.hid_device(), FEATURES[name], enabled)
 
+    def motor_speed(self, axis: str, degrees_per_second: float) -> float:
+        return set_motor_speed(self.hid_device(), axis, degrees_per_second)
+
+    def target_track(self, mode: str) -> None:
+        set_target_track(self.hid_device(), TARGET_TRACK_MODES[mode])
+
+    def lock(self, name: str, locked: bool) -> None:
+        set_lock(self.hid_device(), name, locked)
+
+    def save_power_on_position(self) -> None:
+        save_power_on_position(self.hid_device())
+
+    def power_on_position(self) -> tuple[float, float] | None:
+        return get_power_on_position(self.hid_device())
+
     def state(self) -> dict:
         return read_state(self.hid_device())
 
@@ -548,7 +744,8 @@ def execute(command: str, value: str | None = None) -> str:
     }
     hid_commands = {
         "idle", "track", "privacy", "gesture-on", "gesture-off",
-        "audio", "auto-privacy",
+        "audio", "auto-privacy", "state", "pan-speed", "tilt-speed", "target",
+        "wb-lock", "exposure-lock", "focus-lock", "power-on-position",
     }
 
     video = find_video_device() if command in video_commands else None
@@ -578,6 +775,36 @@ def execute(command: str, value: str | None = None) -> str:
         seconds = int(value) if value is not None else 10
         set_auto_privacy(hid, seconds)
         return "Auto-privacy OFF" if seconds == 0 else f"Auto-privacy ON ({seconds}s)"
+    if command == "state":
+        state = read_state(hid)
+        return "\n".join(f"{key}: {value}" for key, value in state.items()) or "No reply from the camera"
+    if command in ("pan-speed", "tilt-speed"):
+        axis = command.split("-")[0]
+        if value is None:
+            speed = get_motor_speed(hid, axis)
+            return f"{axis} speed: {round(speed)}°/s" if speed is not None else "No reply from the camera"
+        speed = set_motor_speed(hid, axis, float(value))
+        return f"{axis} speed: {round(speed)}°/s"
+    if command == "target":
+        if value not in TARGET_TRACK_MODES:
+            raise PixyError("Usage: target " + "|".join(TARGET_TRACK_MODES))
+        set_target_track(hid, TARGET_TRACK_MODES[value])
+        return f"Tracking target: {value}"
+    if command in ("wb-lock", "exposure-lock", "focus-lock"):
+        if value not in ("on", "off"):
+            raise PixyError(f"Usage: {command} on|off")
+        name = {"wb-lock": "white-balance", "exposure-lock": "exposure", "focus-lock": "focus"}[command]
+        set_lock(hid, name, value == "on")
+        return f"{name} lock: {value}"
+    if command == "power-on-position":
+        if value == "save":
+            save_power_on_position(hid)
+        elif value not in (None, "show"):
+            raise PixyError("Usage: power-on-position [show|save]")
+        position = get_power_on_position(hid)
+        if position is None:
+            return "Power-on position: not stored"
+        return f"Power-on position: pan {round(position[0])}°, tilt {round(position[1])}°"
     if command == "flicker":
         if value not in FLICKER_MODES:
             raise PixyError("Usage: flicker " + "|".join(FLICKER_MODES))
@@ -651,6 +878,14 @@ CLI_COMMANDS = {
     "audio": ("nc|live|org", "Microphone mode: noise cancel, live, original"),
     "auto-privacy": ("SECONDS", "Camera-side auto-privacy delay (0 = off; experimental)"),
     "flicker": ("off|50|60", "Anti-flicker frequency"),
+    "target": ("|".join(TARGET_TRACK_MODES), "What tracking keeps in frame"),
+    "pan-speed": ("[DEG/S]", f"Show or set the pan motor speed ({MOTOR_SPEED_MIN}…{MOTOR_SPEED_MAX})"),
+    "tilt-speed": ("[DEG/S]", f"Show or set the tilt motor speed ({MOTOR_SPEED_MIN}…{MOTOR_SPEED_MAX})"),
+    "wb-lock": ("on|off", "Lock the white balance"),
+    "exposure-lock": ("on|off", "Lock the exposure"),
+    "focus-lock": ("on|off", "Lock the focus"),
+    "power-on-position": ("[show|save]", "Show, or store the current pan/tilt as the camera's power-on position"),
+    "state": ("", "Show the camera's on-board settings"),
 }
 
 

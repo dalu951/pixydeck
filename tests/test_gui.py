@@ -20,7 +20,7 @@ _TMP = tempfile.TemporaryDirectory()
 os.environ["XDG_CONFIG_HOME"] = _TMP.name + "/config"
 os.environ["XDG_STATE_HOME"] = _TMP.name + "/state"
 
-from PySide6.QtCore import QObject, QSettings  # noqa: E402
+from PySide6.QtCore import QEvent, QObject, QSettings  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from pixydeck import constants, controls, gui, privacy, virtual_camera  # noqa: E402
@@ -51,6 +51,9 @@ class FakeController:
 
     def video_device(self):
         return "/dev/video-test"
+
+    def power_on_position(self):
+        return (12.4, -7.6)
 
     def __getattr__(self, name):
         def record(*args, **kwargs):
@@ -99,6 +102,9 @@ class GuiTestCase(unittest.TestCase):
         self.window.close()
         self.window.deleteLater()
         APP.processEvents()
+        # processEvents() outside a running event loop skips deferred deletes;
+        # without this every closed window keeps its timers ticking.
+        APP.sendPostedEvents(None, QEvent.DeferredDelete)
 
     def settle(self, predicate=lambda: True, timeout=2.0):
         """Let the worker thread and queued signals run."""
@@ -396,6 +402,82 @@ class WindowTest(GuiTestCase):
         keys = {s.key().toString() for s in self.window.findChildren(QShortcut)}
         for expected in ("C", "F", "T", "P", "S", "+", "-", "1", "Ctrl+4", "Ctrl+Q"):
             self.assertIn(expected, keys)
+
+
+class CameraCommandsTest(GuiTestCase):
+    """Tracking target, motor speed, locks and the power-on position."""
+
+    def test_target_is_sent_and_persisted(self):
+        w = self.window
+        w.target.selected.emit("upper-body")
+        self.assertTrue(self.settle(lambda: self.called("target_track")))
+        self.assertEqual(self.called("target_track")[-1], ("target_track", "upper-body"))
+        self.assertEqual(w.settings.value("camera/target"), "upper-body")
+
+    def test_motor_speed_goes_to_both_axes(self):
+        w = self.window
+        w.motor_speed.slider.setValue(120)
+        self.assertTrue(self.settle(lambda: len(self.called("motor_speed")) >= 2))
+        self.assertEqual({c[1] for c in self.called("motor_speed")}, {"pan", "tilt"})
+        self.assertTrue(all(c[2] == 120 for c in self.called("motor_speed")))
+        self.assertEqual(int(w.settings.value("camera/motor_speed")), 120)
+
+    def test_motor_speed_range_matches_backend(self):
+        slider = self.window.motor_speed.slider
+        self.assertEqual((slider.minimum(), slider.maximum()),
+                         (gui.backend.MOTOR_SPEED_MIN, gui.backend.MOTOR_SPEED_MAX))
+
+    def test_locks_are_sent_not_persisted(self):
+        w = self.window
+        w.lock_toggles["focus"].setChecked(True)
+        self.assertTrue(self.settle(lambda: self.called("lock")))
+        self.assertEqual(self.called("lock")[-1], ("lock", "focus", True))
+        self.assertIsNone(w.settings.value("camera/lock/focus"))
+
+    def test_power_on_position_reports_where_the_camera_stored(self):
+        w = self.window
+        with mock.patch.object(w, "notify") as notify:
+            w.save_power_on_position()
+            self.assertTrue(self.settle(lambda: notify.called))
+        self.assertTrue(self.called("save_power_on_position"))
+        self.assertIn("pan 12°, tilt -8°", notify.call_args.args[0])
+
+    def test_power_on_position_unconfirmed(self):
+        w = self.window
+        with mock.patch.object(self.controller, "power_on_position", return_value=None, create=True), \
+                mock.patch.object(w, "notify") as notify:
+            w.save_power_on_position()
+            self.assertTrue(self.settle(lambda: notify.called))
+        self.assertIn("did not confirm", notify.call_args.args[0])
+
+    def test_camera_state_mirrors_target_and_locks(self):
+        w = self.window
+        w.on_camera_state({"target": "face", "exposure-lock": True, "focus-lock": False})
+        self.assertEqual(w.target.current(), "face")
+        self.assertTrue(w.lock_toggles["exposure"].isChecked())
+        self.assertFalse(w.lock_toggles["focus"].isChecked())
+        self.assertFalse(self.called("lock"))  # mirroring must not echo commands back
+
+    def test_restore_applies_target_and_speed(self):
+        QSettings("pixydeck", "pixydeck").setValue("camera/target", "face")
+        QSettings("pixydeck", "pixydeck").setValue("camera/motor_speed", 30)
+        self.close_window()
+        self.window = gui.PixyGUI()
+        self.controller = self.window.controller
+        self.assertEqual(self.window.motor_speed.value(), 30)
+        self.window.restore_camera_state()
+        self.assertTrue(self.settle(lambda: len(self.called("motor_speed")) >= 2))
+        self.assertIn(("target_track", "face"), self.controller.calls)
+        self.assertIn(("motor_speed", "pan", 30), self.controller.calls)
+
+    def test_unknown_saved_target_falls_back_to_auto(self):
+        QSettings("pixydeck", "pixydeck").setValue("camera/target", "full-body")
+        QSettings("pixydeck", "pixydeck").setValue("camera/motor_speed", 9999)
+        self.close_window()
+        self.window = gui.PixyGUI()
+        self.controller = self.window.controller
+        self.assertEqual(self.window.target.current(), "auto")
+        self.assertEqual(self.window.motor_speed.value(), gui.backend.MOTOR_SPEED_MAX)
 
 
 if __name__ == "__main__":

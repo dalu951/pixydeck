@@ -1,4 +1,8 @@
+import os
+import struct
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -73,6 +77,282 @@ class BackendHelpersTest(unittest.TestCase):
     def test_hid_report_rejects_oversize(self):
         with self.assertRaises(Exception):
             build_hid_report(range(33))
+
+
+class FakeV4L2:
+    """Stands in for fcntl.ioctl on a PIXY capture node."""
+
+    def __init__(self):
+        self.values = {cid: 0 for cid in backend.CONTROL_IDS.values()}
+        self.values[backend.CONTROL_IDS["zoom_absolute"]] = 100
+        self.fail_next = 0
+        self.inactive = set()
+
+    def ioctl(self, fd, request, buf):
+        if self.fail_next:
+            self.fail_next -= 1
+            raise OSError(19, "No such device")
+        if request == backend.VIDIOC_G_CTRL:
+            cid, _ = struct.unpack("Ii", buf)
+            if cid not in self.values:
+                raise OSError(22, "Invalid argument")
+            buf[:] = struct.pack("Ii", cid, self.values[cid])
+        elif request == backend.VIDIOC_S_CTRL:
+            cid, value = struct.unpack("Ii", buf)
+            self.values[cid] = value
+        elif request == backend.VIDIOC_QUERYCTRL:
+            fields = list(struct.unpack(backend.QUERYCTRL_FORMAT, buf))
+            flags = backend.V4L2_CTRL_FLAG_INACTIVE if fields[0] in self.inactive else 0
+            buf[:] = struct.pack(backend.QUERYCTRL_FORMAT, fields[0], 1, b"x", -10, 10, 1, 0, flags, 0, 0)
+        return 0
+
+    def get(self, name):
+        return self.values[backend.CONTROL_IDS[name]]
+
+
+class V4L2TestCase(unittest.TestCase):
+    def setUp(self):
+        self.v4l2 = FakeV4L2()
+        handle, self.device = tempfile.mkstemp()
+        os.close(handle)
+        self.addCleanup(os.unlink, self.device)
+        patch = mock.patch.object(backend.fcntl, "ioctl", self.v4l2.ioctl)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+
+class ControlTest(V4L2TestCase):
+    def test_get_and_set_via_ioctl(self):
+        backend.set_control(self.device, "pan_absolute", 36000)
+        self.assertEqual(backend.get_control(self.device, "pan_absolute"), 36000)
+
+    def test_unknown_control_falls_back_to_v4l2_ctl(self):
+        done = subprocess.CompletedProcess([], 0, stdout="led1_mode: 3\n", stderr="")
+        with mock.patch.object(backend.subprocess, "run", return_value=done) as run:
+            self.assertEqual(backend.get_control(self.device, "led1_mode"), 3)
+        self.assertIn("--get-ctrl=led1_mode", run.call_args.args[0])
+
+    def test_v4l2_ctl_errors_become_pixy_errors(self):
+        failed = subprocess.CompletedProcess([], 1, stdout="", stderr="unknown control")
+        odd = subprocess.CompletedProcess([], 0, stdout="garbage", stderr="")
+        with mock.patch.object(backend.subprocess, "run", return_value=failed):
+            with self.assertRaisesRegex(backend.PixyError, "unknown control"):
+                backend.get_control(self.device, "led1_mode")
+            with self.assertRaisesRegex(backend.PixyError, "unknown control"):
+                backend.set_control(self.device, "led1_mode", 1)
+        with mock.patch.object(backend.subprocess, "run", return_value=odd):
+            with self.assertRaisesRegex(backend.PixyError, "Unexpected"):
+                backend.get_control(self.device, "led1_mode")
+
+    def test_ioctl_failure_falls_back_to_v4l2_ctl_on_set(self):
+        self.v4l2.fail_next = 1
+        done = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+        with mock.patch.object(backend.subprocess, "run", return_value=done) as run:
+            backend.set_control(self.device, "zoom_absolute", 120)
+        self.assertIn("--set-ctrl=zoom_absolute=120", run.call_args.args[0])
+
+    def test_query_control(self):
+        self.v4l2.inactive.add(backend.CONTROL_IDS["exposure_time_absolute"])
+        info = backend.query_control(self.device, "brightness")
+        self.assertEqual(info, {"min": -10, "max": 10, "step": 1, "default": 0, "inactive": False})
+        self.assertTrue(backend.query_control(self.device, "exposure_time_absolute")["inactive"])
+        self.assertIsNone(backend.query_control(self.device, "no_such_control"))
+        self.assertIsNone(backend.query_control("/nonexistent/video", "brightness"))
+
+
+class CliV4L2Test(V4L2TestCase):
+    def setUp(self):
+        super().setUp()
+        patch = mock.patch.object(backend, "find_video_device", return_value=self.device)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def test_steps_and_limits(self):
+        backend.execute("right")
+        backend.execute("up")
+        self.assertEqual(self.v4l2.get("pan_absolute"), backend.STEP)
+        self.assertEqual(self.v4l2.get("tilt_absolute"), backend.STEP)
+        backend.execute("left")
+        backend.execute("left")
+        backend.execute("down")
+        self.assertEqual(self.v4l2.get("pan_absolute"), -backend.STEP)
+        self.assertEqual(self.v4l2.get("tilt_absolute"), 0)
+        backend.execute("tilt", "-90")
+        self.assertEqual(self.v4l2.get("tilt_absolute"), backend.TILT_MIN)
+        backend.execute("down")
+        self.assertEqual(self.v4l2.get("tilt_absolute"), backend.TILT_MIN)
+
+    def test_zoom(self):
+        backend.execute("zoom-in")
+        self.assertEqual(self.v4l2.get("zoom_absolute"), 110)
+        backend.execute("zoom", "500")
+        self.assertEqual(self.v4l2.get("zoom_absolute"), backend.ZOOM_MAX)
+        backend.execute("zoom-out")
+        self.assertEqual(self.v4l2.get("zoom_absolute"), backend.ZOOM_MAX - 10)
+
+    def test_center_and_status(self):
+        backend.execute("pan", "45")
+        self.assertIn("pan:  45 deg", backend.execute("status"))
+        self.assertEqual(backend.execute("center"), "Centered")
+        self.assertIn("pan:  0 deg", backend.execute("status"))
+        self.assertIn("zoom: 100", backend.execute("status"))
+
+    def test_flicker(self):
+        self.assertEqual(backend.execute("flicker", "50"), "Anti-flicker: 50")
+        self.assertEqual(self.v4l2.get("power_line_frequency"), 1)
+        with self.assertRaises(backend.PixyError):
+            backend.execute("flicker", "75")
+
+    def test_missing_device(self):
+        with mock.patch.object(backend, "find_video_device", return_value=None):
+            with self.assertRaisesRegex(backend.PixyError, "video device not found"):
+                backend.execute("status")
+
+    def test_unknown_command(self):
+        with self.assertRaisesRegex(backend.PixyError, "Unknown command"):
+            backend.execute("dance")
+
+
+class ControllerTest(V4L2TestCase):
+    def setUp(self):
+        super().setUp()
+        patch = mock.patch.object(backend, "find_video_device", return_value=self.device)
+        self.find = patch.start()
+        self.addCleanup(patch.stop)
+        self.controller = backend.PixyController()
+        self.addCleanup(self.controller.close)
+
+    def test_position_and_moves_are_clamped(self):
+        self.controller.move_to(200, -80)
+        self.controller.set_zoom(10)
+        self.assertEqual(self.controller.position(), (150, -52, backend.ZOOM_MIN))
+
+    def test_device_is_opened_once(self):
+        for _ in range(5):
+            self.controller.get("pan_absolute")
+        self.assertEqual(self.find.call_count, 1)
+        self.assertEqual(self.controller.video_device(), self.device)
+
+    def test_unplug_triggers_one_rediscovery(self):
+        self.controller.get("pan_absolute")
+        self.v4l2.fail_next = 1
+        self.assertEqual(self.controller.get("pan_absolute"), 0)
+        self.assertEqual(self.find.call_count, 2)
+
+    def test_persistent_failure_raises(self):
+        self.v4l2.fail_next = 2
+        with self.assertRaisesRegex(backend.PixyError, "pan_absolute"):
+            self.controller.get("pan_absolute")
+
+    def test_missing_camera(self):
+        self.find.return_value = None
+        self.assertIsNone(self.controller.video_device())
+        self.assertIsNone(self.controller.query("brightness"))
+        with self.assertRaises(backend.PixyError):
+            self.controller.get("pan_absolute")
+        with mock.patch.object(backend, "find_hidraw_device", return_value=None):
+            with self.assertRaisesRegex(backend.PixyError, "HID device not found"):
+                self.controller.hid_device()
+
+    def test_flicker_and_query(self):
+        self.controller.flicker("60")
+        self.assertEqual(self.v4l2.get("power_line_frequency"), 2)
+        self.assertEqual(self.controller.query("brightness")["max"], 10)
+
+
+class DiscoveryTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def hidraw(self, name, uevent):
+        path = self.root / name / "device"
+        path.mkdir(parents=True)
+        (path / "uevent").write_text(uevent)
+
+    def test_hidraw_by_usb_identity(self):
+        self.hidraw("hidraw0", "HID_ID=0003:0000046D:0000C52B\nHID_NAME=Logitech Receiver\n")
+        self.hidraw("hidraw1", f"HID_ID={backend.HID_ID}\nHID_NAME=EMEET EMEET PIXY\n")
+        (self.root / "hidraw2").mkdir()  # no uevent: skipped
+        self.assertEqual(backend.find_hidraw_device(self.root), "/dev/hidraw1")
+
+    def test_hidraw_by_name_and_ids(self):
+        self.hidraw("hidraw3", "HID_NAME=EMEET EMEET PIXY\nPRODUCT=328f/c0/1\nHID_PHYS=328F:00C0\n")
+        self.assertEqual(backend.find_hidraw_device(self.root), "/dev/hidraw3")
+
+    def test_no_hidraw(self):
+        self.assertIsNone(backend.find_hidraw_device(self.root / "missing"))
+        self.hidraw("hidraw0", "HID_NAME=Keyboard\n")
+        self.assertIsNone(backend.find_hidraw_device(self.root))
+
+    def test_video_capture_node_is_the_one_with_ptz(self):
+        for index, name in ((0, "Integrated Camera"), (2, "EMEET PIXY: EMEET PIXY"), (3, "EMEET PIXY: EMEET PIXY"),
+                            (20, "PixyDeck Virtual Camera EMEET PIXY")):
+            node = self.root / f"video{index}"
+            node.mkdir()
+            (node / "name").write_text(name + "\n")
+        answers = {"/dev/video2": OSError(25, "Inappropriate ioctl"), "/dev/video3": 0}
+
+        def ioctl_get(device, control_id, fd=None):
+            result = answers[device]
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+        with mock.patch.object(backend, "_ioctl_get", ioctl_get):
+            self.assertEqual(backend.find_video_device(self.root), "/dev/video3")
+            answers["/dev/video3"] = OSError(25, "Inappropriate ioctl")
+            self.assertIsNone(backend.find_video_device(self.root))
+
+
+class CameraUsersTest(unittest.TestCase):
+    def test_finds_this_process_holding_a_device(self):
+        with tempfile.NamedTemporaryFile() as device:
+            users = backend.camera_users([device.name])
+            self.assertIn(os.getpid(), [pid for pid, _ in users])
+            self.assertEqual(backend.camera_users([device.name], exclude_pids=[os.getpid()]), [])
+
+    def test_missing_devices(self):
+        self.assertEqual(backend.camera_users(["/dev/does-not-exist"]), [])
+
+
+class HidErrorTest(unittest.TestCase):
+    def test_permission_error_names_the_udev_rule(self):
+        with mock.patch("builtins.open", side_effect=PermissionError(13, "denied")):
+            with self.assertRaisesRegex(backend.PixyError, "udev rule"):
+                backend.send_hid_report("/dev/hidraw9", [9, 4, 0, 2])
+
+    def test_write_and_open_errors(self):
+        with mock.patch("builtins.open", side_effect=OSError(5, "I/O error")):
+            with self.assertRaisesRegex(backend.PixyError, "Unable to write"):
+                backend.send_hid_report("/dev/hidraw9", [9, 4, 0, 2])
+        with self.assertRaisesRegex(backend.PixyError, "Unable to open"):
+            backend.hid_query("/nonexistent/hidraw", [9, 4, 0, 2])
+
+    def test_query_io_error(self):
+        with tempfile.NamedTemporaryFile() as device, \
+                mock.patch.object(backend.os, "write", side_effect=OSError(32, "Broken pipe")):
+            with self.assertRaisesRegex(backend.PixyError, "HID query failed"):
+                backend.hid_query(device.name, [9, 4, 0, 2])
+
+    def test_query_on_a_node_at_eof_returns_in_time(self):
+        import time
+        with tempfile.NamedTemporaryFile() as device:  # always readable, reads return b""
+            start = time.monotonic()
+            self.assertIsNone(backend.hid_query(device.name, [9, 4, 0, 2], timeout=0.2))
+            self.assertLess(time.monotonic() - start, 2)
+
+    def test_cli_hid_commands(self):
+        with mock.patch.object(backend, "find_hidraw_device", return_value="/dev/hidrawX"), \
+                mock.patch.object(backend, "send_hid_report") as send, mock.patch.object(backend.time, "sleep"):
+            self.assertEqual(backend.execute("gesture-on"), "Gesture control ON")
+            self.assertEqual(backend.execute("gesture-off"), "Gesture control OFF")
+            self.assertEqual(backend.execute("audio", "live"), "Audio: LIVE mode")
+            self.assertEqual(backend.execute("auto-privacy", "0"), "Auto-privacy OFF")
+            self.assertEqual(backend.execute("auto-privacy"), "Auto-privacy ON (10s)")
+            self.assertEqual(backend.execute("privacy"), "Privacy mode ON")
+        self.assertEqual(len(send.call_args_list), 12)
 
 
 if __name__ == "__main__":

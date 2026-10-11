@@ -48,11 +48,20 @@ def helper_path() -> Path | None:
     return None
 
 
-def _run(*args: str) -> subprocess.CompletedProcess:
+# Exit code for "could not run at all"; pkexec itself uses 126/127 for a
+# dismissed or failed authorization.
+RUN_FAILED = -1
+# Long enough to type a password at the polkit prompt.
+FIX_TIMEOUT = 600
+
+
+def _run(*args: str, timeout: float = 10) -> subprocess.CompletedProcess:
     try:
-        return subprocess.run(args, capture_output=True, text=True, check=False, timeout=10)
+        return subprocess.run(args, capture_output=True, text=True, check=False, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(args, RUN_FAILED, "", f"{args[0]} timed out after {timeout:.0f} s")
     except (OSError, subprocess.SubprocessError) as exc:
-        return subprocess.CompletedProcess(args, 127, "", str(exc))
+        return subprocess.CompletedProcess(args, RUN_FAILED, "", str(exc))
 
 
 def camera_connected() -> bool:
@@ -163,7 +172,7 @@ def run_fix(action: str) -> tuple[bool, str]:
         return False, "The setup helper is not installed. Reinstall PixyDeck (package or ./install.sh)."
     if shutil.which("pkexec") is None:
         return False, f"pkexec is missing. Run manually: sudo {helper} {action}"
-    result = _run("pkexec", str(helper), action)
+    result = _run("pkexec", str(helper), action, timeout=FIX_TIMEOUT)
     if result.returncode == 0:
         return True, "Done."
     if result.returncode in (126, 127):

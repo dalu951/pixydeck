@@ -10,7 +10,7 @@ Prerequisites: an EMEET PIXY, Python 3.10+, `v4l-utils`, FFmpeg and (for the vir
 git clone https://github.com/dalu951/pixydeck.git
 cd pixydeck
 python3 -m venv .venv
-.venv/bin/pip install -e '.[ai]' pyflakes
+.venv/bin/pip install -e '.[ai]' pyflakes coverage
 .venv/bin/pixydeck
 ```
 
@@ -40,6 +40,8 @@ Python `>=3.10`.
 | `python tools/gen_docs.py` | Regenerate AUTO-GENERATED doc sections |
 | `python tools/gen_docs.py --check` | Fail if docs are stale (CI) |
 | `QT_QPA_PLATFORM=offscreen PYTHONPATH=src python -m unittest discover -s tests` | Run the test suite |
+| `python -m coverage run -m unittest discover -s tests && python -m coverage report` | Test suite with coverage (CI floor in `pyproject.toml`) |
+| `PIXYDECK_HARDWARE=1 PYTHONPATH=src python -m unittest tests.test_hardware -v` | Round-trip checks on a connected PIXY |
 | `python -m pyflakes src tests` | Lint |
 <!-- /AUTO-GENERATED:commands -->
 
@@ -47,7 +49,8 @@ Python `>=3.10`.
 
 - Tests live in `tests/` and use `unittest`; Qt runs with `QT_QPA_PLATFORM=offscreen`.
 - Pure logic (framing, smoothing, stabilization, keying, HID report building) must be testable without a camera – keep it out of widget classes.
-- Code that talks to hardware gets a mock-based test where possible (see `test_focus_point_is_scaled_to_camera_range`).
+- Code that talks to hardware gets a test against the simulated camera (`tests/pixy_sim.py`) or the fake V4L2 driver in `tests/test_backend.py`; a new HID command also gets a golden-bytes test with the bytes captured on a PIXY and, if it can be undone, a round-trip in `tests/test_hardware.py`.
+- New HID heads must not fall into a group blocked by `backend.is_forbidden_head`; probe unknown heads read-only first.
 - Anything touching the camera also needs a manual check from [TESTING.md](TESTING.md).
 
 ## Code layout

@@ -11,14 +11,15 @@ Links liegt die Live-Vorschau, rechts fünf Tabs. Die Kopfzeile zeigt die Kamera
 - **Schwenk-Feld:** klicken oder ziehen, um die Kamera auszurichten; der Punkt zeigt, wohin sie schaut. Nach unten geht es nur bis −52°, darunter würde die Kamera nur in ihre Ruheposition fahren.
 - **Pfeiltasten / Pfeil-Buttons:** gedrückt halten zum Gleiten – je länger, desto schneller.
 - **Im Vorschaubild:** ziehen zum Ausrichten (bzw. zum Verschieben des Ausschnitts beim Digitalzoom), Doppelklick zentriert eine Stelle, Mausrad zoomt.
+- **Motorgeschwindigkeit:** wie schnell die Kamera dreht (1–240 °/s, Standard 60) – langsam für ruhige Schwenks im Livestream, schnell zum Anfahren einer Position. Gilt auch für das Tracking.
 - **Zoom-Regler (1×–4×):** nutzt den Hardware-Zoom der PIXY (bis 1,5×), wo der Videomodus ihn unterstützt – unter 1080p und bei 1080p30 – und darüber digitalen Zoom.
-- **Positionen 1–4:** leeren Platz anklicken speichert die aktuelle Position, ein belegter fährt sie an; Rechtsklick für mehr. *Position at startup* legt fest, wohin die Kamera beim Start fährt.
+- **Positionen 1–4:** leeren Platz anklicken speichert die aktuelle Position, ein belegter fährt sie an; Rechtsklick für mehr. *Position at startup* legt fest, wohin die Kamera beim Start fährt. **Save as camera power-on position** speichert die aktuelle Ausrichtung in der Kamera selbst – sie startet dann dort, auch ohne PixyDeck oder an einem anderen Rechner.
 
 ## Tab „AI & Privacy“
 
 <img src="../media/ai.png" width="860" alt="Tab KI und Privatsphäre">
 
-- **KI der PIXY:** *Off*, *Face tracking* (die Kamera folgt dir mechanisch) oder *Privacy* (die Linse dreht weg). Außerdem Gestensteuerung und der Mikrofonmodus (Geräuschunterdrückung, Live, Original). Änderungen per Handgeste erscheinen nach etwa drei Sekunden auch in der App.
+- **KI der PIXY:** *Off*, *Face tracking* (die Kamera folgt dir mechanisch) oder *Privacy* (die Linse dreht weg). *Tracking keeps in frame* bestimmt, worauf das Tracking der Kamera achtet: *Auto*, *Face* (Gesicht) oder *Upper body* (Oberkörper). Außerdem Gestensteuerung und der Mikrofonmodus (Geräuschunterdrückung, Live, Original). Änderungen per Handgeste erscheinen nach etwa drei Sekunden auch in der App.
 - **KI-Fokus:** *Center*, *Face* oder *Click point* – dann irgendetwas im Vorschaubild anklicken, z. B. einen Gegenstand, den du in die Kamera hältst; die zweite Linse der PIXY stellt darauf scharf (gelbe Markierung).
 - **Auto-Framing (Software):** zoomt digital und folgt Gesichtern. *Wide*, *Medium*, *Tight* bestimmen, wie nah; *Show detected faces* zeigt die erkannten Gesichter.
 - **Privacy-Timer:** geht nach der eingestellten Leerlaufzeit in den Privacy-Modus, verlässt ihn automatisch, sobald eine andere App (Zoom, Teams, Meet, OBS …) die Kamera öffnet, und kann dabei das PIXY-Mikrofon stummschalten. Solange die Vorschau sichtbar ist, pausiert der Timer.
@@ -27,7 +28,7 @@ Links liegt die Live-Vorschau, rechts fünf Tabs. Die Kopfzeile zeigt die Kamera
 
 ## Tab „Image“
 
-Helligkeit, Kontrast, Sättigung, Farbton, Schärfe, Gamma und Verstärkung; Weißabgleich, Belichtung und Fokus automatisch oder manuell; Gegenlichtausgleich; **Stabilisierung** (*Steady picture*, nutzt 8 % digitale Reserve gegen Wackeln); Spiegeln, vertikal Kippen und automatisches Drehen bei Überkopf-Montage; Flimmerschutz (50/60 Hz). *Reset picture* stellt die Werkseinstellungen der Kamera wieder her.
+Helligkeit, Kontrast, Sättigung, Farbton, Schärfe, Gamma und Verstärkung; Weißabgleich, Belichtung und Fokus automatisch oder manuell; Gegenlichtausgleich; **Stabilisierung** (*Steady picture*, nutzt 8 % digitale Reserve gegen Wackeln); Spiegeln, vertikal Kippen und automatisches Drehen bei Überkopf-Montage; **Sperren**, die Belichtung, Weißabgleich oder Fokus beim aktuellen Wert festhalten (damit das Bild nicht pumpt, wenn du dich vorbeugst oder etwas in die Kamera hältst); Flimmerschutz (50/60 Hz). *Reset picture* stellt die Werkseinstellungen der Kamera wieder her.
 
 ## Tab „Background“
 
@@ -98,4 +99,12 @@ Gefüllt wird mit **Unschärfe**, **Verlauf**, **Farbe** oder einem eigenen **Bi
 | `pixydeck-cli audio nc\|live\|org` | Microphone mode: noise cancel, live, original |
 | `pixydeck-cli auto-privacy SECONDS` | Camera-side auto-privacy delay (0 = off; experimental) |
 | `pixydeck-cli flicker off\|50\|60` | Anti-flicker frequency |
+| `pixydeck-cli target auto\|face\|upper-body` | What tracking keeps in frame |
+| `pixydeck-cli pan-speed [DEG/S]` | Show or set the pan motor speed (1…240) |
+| `pixydeck-cli tilt-speed [DEG/S]` | Show or set the tilt motor speed (1…240) |
+| `pixydeck-cli wb-lock on\|off` | Lock the white balance |
+| `pixydeck-cli exposure-lock on\|off` | Lock the exposure |
+| `pixydeck-cli focus-lock on\|off` | Lock the focus |
+| `pixydeck-cli power-on-position [show\|save]` | Show, or store the current pan/tilt as the camera's power-on position |
+| `pixydeck-cli state` | Show the camera's on-board settings |
 <!-- /AUTO-GENERATED:cli -->
