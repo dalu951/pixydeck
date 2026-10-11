@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pixydeck"
-version = "0.5.1"
+version = "0.5.2"
 description = "EMEET PixyDeck: unofficial Linux control suite for the EMEET PIXY webcam (PTZ, AI focus, auto-framing, background replacement, virtual camera)"
 readme = "README.md"
 requires-python = ">=3.10"

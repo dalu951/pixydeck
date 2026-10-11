@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.2 - 2026-10-11
 
 - **Find me when I sit down** (Tracking tab, on by default): the PIXY's own tracking tilts too slowly to follow you when you sit down and then stops looking. PixyDeck learns your seated tilt and tilts back there when your face has been gone for over a second; the camera's tracking takes over again
 - Pan/tilt shown in PixyDeck come from the motor controller – the V4L2 controls only echo the last command and missed the camera's own tracking moves
