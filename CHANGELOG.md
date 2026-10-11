@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Call detection** (AI & Privacy tab → *Calls*): when another app opens the PIXY or the virtual camera, tracking turns on; after the call the lens turns away. Optional: use the PIXY microphone as the default input during calls and switch back afterwards. Brief device probes by browsers are ignored (debounced)
+- Tests: the GUI test harness can no longer run real `pactl` commands
+
 ## 0.4.1 - 2026-10-11
 
 - Scrolling a tab no longer changes the slider, spin box or drop-down that passes under the mouse; click a control first to adjust it with the wheel

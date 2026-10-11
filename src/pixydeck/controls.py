@@ -84,6 +84,31 @@ class ControlsMixin:
                 "Needs the optional AI extra: pip install 'pixydeck[ai]'")
         layout.addWidget(framing)
 
+        calls = Card("Calls")
+        self.calls_enabled = ToggleSwitch()
+        self.calls_enabled.toggled.connect(self.calls_toggled)
+        calls.body.addWidget(SettingRow(
+            "Detect calls", self.calls_enabled,
+            "A call starts when another app opens the PIXY and ends a few seconds after it lets go"))
+        calls.body.addWidget(section_title("When a call starts"))
+        self.calls_start = Segmented([("Face tracking", "track"), ("Keep mode", "keep")])
+        self.calls_start.selected.connect(lambda v: self.settings.setValue("calls/start", v))
+        calls.body.addWidget(self.calls_start)
+        self.calls_mic = ToggleSwitch()
+        self.calls_mic.toggled.connect(lambda v: self.settings.setValue("calls/microphone", v))
+        self.calls_mic.setEnabled(bool(PACTL))
+        calls.body.addWidget(SettingRow(
+            "Use the PIXY microphone", self.calls_mic,
+            "Makes it the default input during the call and switches back afterwards"
+            if PACTL else "pactl not found"))
+        self.calls_privacy = ToggleSwitch()
+        self.calls_privacy.toggled.connect(lambda v: self.settings.setValue("calls/privacy", v))
+        calls.body.addWidget(SettingRow(
+            "Privacy when the call ends", self.calls_privacy, "The lens turns away"))
+        self.calls_status = QLabel("", objectName="subtle")
+        calls.body.addWidget(self.calls_status)
+        layout.addWidget(calls)
+
         privacy = Card("Privacy timer")
         self.privacy_enabled = ToggleSwitch()
         self.privacy_enabled.toggled.connect(lambda v: self.settings.setValue("privacy/enabled", v))
@@ -206,6 +231,7 @@ class ControlsMixin:
         if mode == "privacy" and self.tracking_mode != "privacy":
             self.mode_before_privacy = self.tracking_mode
         self.privacy_by_timer = by_timer and mode == "privacy"
+        self.privacy_by_call = False
         self.tracking_changed_at = time.monotonic()
         self.tracking_mode = mode
         self.settings.setValue("camera/tracking", mode)

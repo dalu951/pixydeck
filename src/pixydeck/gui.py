@@ -53,7 +53,7 @@ from .constants import (
 from .controls import ControlsMixin, apply_controls
 from .diagnostics import install_qt_message_handler, log_file, setup_logging
 from .presets import PresetsMixin
-from .privacy import PACTL, PrivacyMixin, set_pixy_microphone_muted
+from .privacy import PACTL, CallDetector, PrivacyMixin, set_default_microphone, set_pixy_microphone_muted
 from .setup import SetupDialog, needs_attention, run_checks
 from .virtual_camera import VirtualCameraMixin
 from .vision import Crop, FrameProcessor, Smoother, framing_target, vision_available
@@ -170,6 +170,9 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         self.tracking_mode = "idle"
         self.mode_before_privacy = "idle"
         self.privacy_by_timer = False
+        self.privacy_by_call = False
+        self.call_detector = CallDetector()
+        self.microphone_before_call: str | None = None
         self.mic_muted_by_us = False
         self.idle_seconds = 0
         self.focus_point = (0.5, 0.5)
@@ -466,6 +469,12 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         self.privacy_minutes.setValue(self.int_setting("privacy/minutes", 10))
         self.privacy_wake.set_silently(self.bool_setting("privacy/wake", True))
         self.privacy_mic.set_silently(self.bool_setting("privacy/mute_mic") and bool(PACTL))
+        self.calls_enabled.set_silently(self.bool_setting("calls/enabled"))
+        start = str(self.settings.value("calls/start", "track"))
+        self.calls_start.set_current(start if start in ("track", "keep") else "track")
+        self.calls_mic.set_silently(self.bool_setting("calls/microphone") and bool(PACTL))
+        self.calls_privacy.set_silently(self.bool_setting("calls/privacy", True))
+        self.show_call_state()
         default_mode = VIRTUAL_PROCESSED if vision_available() else VIRTUAL_DIRECT
         self.virtual_mode.set_current(str(self.settings.value("virtual/mode", default_mode)))
         index = self.output_size.findData(str(self.settings.value("virtual/output_size", "1920x1080")))
@@ -1043,6 +1052,9 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
             self.stop_virtual_camera(False)
         if self.mic_muted_by_us:
             set_pixy_microphone_muted(False)
+        if self.microphone_before_call is not None:
+            previous, self.microphone_before_call = self.microphone_before_call, None
+            set_default_microphone(previous)  # closed mid-call
         self.stop_camera()
         self.processor.shutdown()
         self.status_worker.shutdown(timeout=1.0)

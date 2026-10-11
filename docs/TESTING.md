@@ -44,6 +44,7 @@ Reads every on-board setting and round-trips motor speed, tracking target and lo
 - [ ] Motor speed slider: 5 °/s pans visibly slowly, 240 °/s fast; setting survives a restart
 - [ ] Tracking keeps in frame: *Face* vs *Upper body* changes how tight tracking frames you
 - [ ] Locks: with *Lock exposure* on, holding a bright object up does not darken the picture
+- [ ] Calls: with *Detect calls* on, join a Meet test call – tracking turns on; leave – privacy after a few seconds; with *Use the PIXY microphone* the default input switches and returns
 - [ ] *Save as camera power-on position*, unplug/replug: the camera returns there
 - [ ] Zoom: slider, mouse wheel, `+`/`-`; hardware zoom at 1280×720, digital at 4K
 - [ ] Presets: store, recall, startup position

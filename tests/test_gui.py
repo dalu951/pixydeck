@@ -89,6 +89,10 @@ class GuiTestCase(unittest.TestCase):
             mock.patch.object(gui, "run_checks", lambda: []),
             mock.patch.object(privacy, "camera_users", lambda *a, **k: []),
             mock.patch.object(privacy, "pixy_video_nodes", lambda: []),
+            # Never touch the developer's real audio setup.
+            mock.patch.object(privacy.subprocess, "run", side_effect=AssertionError("real pactl call in a GUI test")),
+            mock.patch.object(gui, "set_default_microphone", lambda name: None),
+            mock.patch.object(gui, "set_pixy_microphone_muted", lambda muted: False),
             mock.patch.object(virtual_camera, "find_virtual_camera_device", lambda: "/dev/video20"),
             mock.patch.object(virtual_camera, "FFMPEG", "/usr/bin/ffmpeg"),
         ):

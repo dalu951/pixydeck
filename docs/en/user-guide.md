@@ -22,6 +22,7 @@ The window has the live preview on the left and five tabs on the right. The head
 - **PIXY on-board AI:** *Off*, *Face tracking* (the camera follows you physically) or *Privacy* (the lens turns away). *Tracking keeps in frame* chooses what the camera's tracking follows: *Auto*, *Face* or *Upper body*. Gesture control and the microphone's DSP mode (noise cancel, live, original) are here too. Changes made by hand gestures appear in the app within about three seconds.
 - **AI focus:** *Center*, *Face*, or *Click point* – then click anything in the preview, e.g. an object you hold up, and the PIXY's second lens focuses on it (yellow marker).
 - **Auto-framing (software):** digitally zooms and follows faces. *Wide*, *Medium*, *Tight* set how close; *Show detected faces* draws the detection boxes.
+- **Calls:** with *Detect calls* on, PixyDeck notices when Zoom, Teams, Meet, OBS … open the PIXY (or the virtual camera). When a call starts it turns face tracking on (or only leaves privacy with *Keep mode*) and can make the PIXY microphone the default input; a few seconds after the last app lets go, the lens turns away (*Privacy when the call ends*) and the previous microphone is restored. A quick device check by a browser does not count as a call.
 - **Privacy timer:** enters privacy mode after the idle time, wakes up automatically as soon as another app (Zoom, Teams, Meet, OBS …) opens the camera, and can mute the PIXY microphone while in privacy. The timer pauses while the preview is visible.
 
 <img src="../media/autoframe.gif" width="640" alt="Auto-framing">

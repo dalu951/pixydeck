@@ -1,4 +1,4 @@
-"""Privacy timer: idle detection and waking when other apps use the camera.
+"""Privacy timer, call detection and waking when other apps use the camera.
 
 Mixed into ``PixyGUI``; methods use the window's widgets and state via ``self``.
 """
@@ -38,8 +38,66 @@ def set_pixy_microphone_muted(muted: bool) -> bool:
     return changed
 
 
+def pixy_microphone() -> str | None:
+    """PipeWire/PulseAudio name of the PIXY microphone, if present."""
+    if not PACTL:
+        return None
+    result = subprocess.run([PACTL, "list", "short", "sources"], capture_output=True, text=True, check=False)
+    for line in result.stdout.splitlines():
+        fields = line.split("\t")
+        if len(fields) >= 2 and "pixy" in fields[1].lower() and not fields[1].endswith(".monitor"):
+            return fields[1]
+    return None
+
+
+def default_microphone() -> str | None:
+    if not PACTL:
+        return None
+    result = subprocess.run([PACTL, "get-default-source"], capture_output=True, text=True, check=False)
+    return result.stdout.strip() or None
+
+
+def set_default_microphone(name: str) -> None:
+    subprocess.run([PACTL, "set-default-source", name], check=False)
+
+
+class CallDetector:
+    """Turns "which apps hold the camera" polls into call start/end events.
+
+    Browsers and some call apps open the camera for a moment to list devices,
+    so a call starts only after ``start_polls`` consecutive polls with a user
+    and ends after ``end_polls`` polls without one.
+    """
+
+    def __init__(self, start_polls: int = 2, end_polls: int = 3) -> None:
+        self.start_polls = start_polls
+        self.end_polls = end_polls
+        self.active = False
+        self.apps: list[str] = []
+        self._streak = 0
+
+    def update(self, apps: list[str]) -> str | None:
+        in_use = bool(apps)
+        if in_use:
+            self.apps = sorted(set(apps))
+        if in_use == self.active:
+            self._streak = 0
+            return None
+        self._streak += 1
+        if self._streak < (self.start_polls if in_use else self.end_polls):
+            return None
+        self._streak = 0
+        self.active = in_use
+        return "started" if in_use else "ended"
+
+    def reset(self) -> None:
+        self.active = False
+        self.apps = []
+        self._streak = 0
+
+
 class PrivacyMixin:
-    """Privacy timer: idle detection and waking when other apps use the camera."""
+    """Privacy timer, call detection and waking when other apps use the camera."""
 
     def own_pids(self) -> list[int]:
         pids = [os.getpid()]
@@ -64,6 +122,8 @@ class PrivacyMixin:
             self.set_tracking_mode(self.mode_before_privacy if self.mode_before_privacy != "privacy" else "idle")
             self.notify(f"Left privacy mode – {users[0][1]} is using the camera", 6000)
 
+        self.check_call(users)
+
         watching_here = self.streams_frames and self.isVisible() and not self.isMinimized()
         enabled = self.privacy_enabled.isChecked()
         if users or watching_here or self.tracking_mode == "privacy" or not enabled:
@@ -75,7 +135,8 @@ class PrivacyMixin:
                 self.notify("Privacy mode after idle timeout", 6000)
 
         if self.tracking_mode == "privacy":
-            status = "In privacy mode" + (" (idle timer)" if self.privacy_by_timer else "")
+            status = "In privacy mode" + (
+                " (idle timer)" if self.privacy_by_timer else " (call ended)" if self.privacy_by_call else "")
         elif not enabled:
             status = ""
         elif users:
@@ -86,3 +147,58 @@ class PrivacyMixin:
             remaining = max(0, self.privacy_minutes.value() * 60 - self.idle_seconds)
             status = f"Privacy in {remaining // 60}:{remaining % 60:02d}"
         self.privacy_status.setText(status)
+
+    # -- calls ----------------------------------------------------------
+    def check_call(self, users: list[tuple[int, str]]) -> None:
+        if not self.calls_enabled.isChecked():
+            return
+        event = self.call_detector.update([name for _pid, name in users])
+        if event == "started":
+            self.on_call_started()
+        elif event == "ended":
+            self.on_call_ended()
+        self.show_call_state()
+
+    def on_call_started(self) -> None:
+        apps = ", ".join(self.call_detector.apps)
+        action = self.calls_start.current() or "track"
+        if action == "track":
+            self.set_tracking_mode("track")
+        elif self.tracking_mode == "privacy":
+            self.set_tracking_mode(self.mode_before_privacy if self.mode_before_privacy != "privacy" else "idle")
+        if self.calls_mic.isChecked():
+            self.worker.submit(self.switch_to_pixy_microphone, key="call-mic")
+        self.notify(f"Call started – {apps}", 6000)
+
+    def on_call_ended(self) -> None:
+        if self.calls_privacy.isChecked():
+            self.set_tracking_mode("privacy")
+            self.privacy_by_call = True
+        if self.microphone_before_call is not None:
+            previous, self.microphone_before_call = self.microphone_before_call, None
+            self.worker.submit(set_default_microphone, previous, key="call-mic")
+        self.notify("Call ended" + (" – privacy mode" if self.calls_privacy.isChecked() else ""), 6000)
+
+    def switch_to_pixy_microphone(self) -> None:
+        """Runs on the worker: make the PIXY the default input, remembering the old one."""
+        pixy = pixy_microphone()
+        current = default_microphone()
+        if pixy is None or current == pixy:
+            return
+        self.microphone_before_call = current
+        set_default_microphone(pixy)
+
+    def calls_toggled(self, enabled: bool) -> None:
+        self.settings.setValue("calls/enabled", enabled)
+        if not enabled:
+            self.call_detector.reset()
+        self.show_call_state()
+
+    def show_call_state(self) -> None:
+        if not self.calls_enabled.isChecked():
+            text = ""
+        elif self.call_detector.active:
+            text = "📞 In a call – " + ", ".join(self.call_detector.apps)
+        else:
+            text = "No call – waiting for Zoom, Teams, Meet, OBS … to open the camera"
+        self.calls_status.setText(text)
