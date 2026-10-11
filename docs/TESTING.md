@@ -5,7 +5,7 @@ Run on a machine with an EMEET PIXY connected.
 ## Automated
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -e '.[ai]' coverage
+python3 -m venv .venv && .venv/bin/pip install -e '.[ai]' 'coverage[toml]'
 QT_QPA_PLATFORM=offscreen PYTHONPATH=src .venv/bin/python -m coverage run -m unittest discover -s tests -v
 .venv/bin/python -m coverage report
 ```
