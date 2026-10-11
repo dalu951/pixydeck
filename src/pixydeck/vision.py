@@ -13,6 +13,7 @@ unavailable.
 
 from __future__ import annotations
 
+import logging
 import math
 import queue
 import subprocess
@@ -31,6 +32,8 @@ except ImportError:  # pragma: no cover - depends on optional extra
 
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QImage
+
+log = logging.getLogger(__name__)
 
 if cv2 is not None:
     from .background import Background, Matting, detect_green_screen, matting_available
@@ -230,6 +233,7 @@ class FrameProcessor(QObject):
         self._detect = False
         self._crop = Crop()
         self._output: subprocess.Popen | None = None
+        self._output_lock = threading.Lock()
         self._output_size = (1280, 720)
         self._detector = None
         self._last_detect = 0.0
@@ -320,7 +324,7 @@ class FrameProcessor(QObject):
     def start_output(self, ffmpeg: str, device: str, width: int, height: int, fps: int) -> None:
         self.stop_output()
         self._output_size = (width, height)
-        self._output = subprocess.Popen(
+        process = subprocess.Popen(
             [
                 ffmpeg, "-hide_banner", "-loglevel", "error",
                 "-f", "rawvideo", "-pix_fmt", "yuv420p",
@@ -331,9 +335,24 @@ class FrameProcessor(QObject):
             stdin=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
+        self._output = process
+        log.info("Virtual camera output: %s %dx%d@%d (ffmpeg pid %d)", device, width, height, fps, process.pid)
+        threading.Thread(target=self._watch_output, args=(process,), name="ffmpeg-watch", daemon=True).start()
+
+    def _watch_output(self, process: subprocess.Popen) -> None:
+        """Drain FFmpeg's stderr (a full pipe would stall it) and report its exit."""
+        tail: list[str] = []
+        for raw in process.stderr:
+            line = raw.decode(errors="replace").rstrip()
+            if line:
+                log.warning("ffmpeg: %s", line)
+                tail = (tail + [line])[-5:]
+        code = process.wait()
+        self._output_failed(process, " ".join(tail) or f"FFmpeg exited ({code})")
 
     def stop_output(self) -> None:
-        process, self._output = self._output, None
+        with self._output_lock:
+            process, self._output = self._output, None
         if process is None:
             return
         try:
@@ -459,7 +478,7 @@ class FrameProcessor(QObject):
             try:
                 process.stdin.write(data)
             except (BrokenPipeError, OSError, ValueError):
-                self._output_failed(process)
+                # FFmpeg is gone; _watch_output reports it with its stderr.
                 continue
             frames += 1
             now = time.monotonic()
@@ -527,13 +546,10 @@ class FrameProcessor(QObject):
         frame = cv2.resize(region, (out_w, out_h), interpolation=interpolation)
         return cv2.cvtColor(frame, cv2.COLOR_BGR2YUV_I420).tobytes(), preview
 
-    def _output_failed(self, process: subprocess.Popen) -> None:
-        if process is not self._output:
-            return
-        error = b""
-        try:
-            error = process.stderr.read() or b""
-        except (OSError, ValueError):
-            pass
-        self._output = None
-        self.output_error.emit(error.decode(errors="replace").strip() or "FFmpeg stopped")
+    def _output_failed(self, process: subprocess.Popen, message: str) -> None:
+        with self._output_lock:
+            if process is not self._output:
+                return  # stopped on purpose or already replaced
+            self._output = None
+        log.error("Virtual camera output stopped: %s", message)
+        self.output_error.emit(message)

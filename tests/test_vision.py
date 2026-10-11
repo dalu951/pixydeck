@@ -1,4 +1,6 @@
 import sys
+import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -11,7 +13,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import cv2
 import numpy as np
 
-from pixydeck.vision import Crop, Smoother, Stabilizer, framing_target, shift_image
+from PySide6.QtCore import QCoreApplication
+
+from pixydeck.vision import Crop, FrameProcessor, Smoother, Stabilizer, framing_target, shift_image
 
 
 class CropTest(unittest.TestCase):
@@ -102,6 +106,53 @@ class StabilizerTest(unittest.TestCase):
         for step in range(1, 15):
             offset = stabilizer.update(translated(base, step * 8, 0))
         self.assertLessEqual(abs(offset[0]), 0.02 + 1e-6)
+
+
+class OutputWatchTest(unittest.TestCase):
+    """The processed virtual camera must notice when FFmpeg dies."""
+
+    def setUp(self):
+        self.processor = FrameProcessor()
+        self.app = QCoreApplication.instance() or QCoreApplication([])
+        self.errors = []
+        self.processor.output_error.connect(self.errors.append)
+        self.tmp = tempfile.TemporaryDirectory()
+
+    def tearDown(self):
+        self.processor.shutdown()
+        self.tmp.cleanup()
+
+    def wait_for_error(self, seconds: float) -> bool:
+        """The error arrives as a queued signal, so pump the event loop."""
+        deadline = time.monotonic() + seconds
+        while not self.errors and time.monotonic() < deadline:
+            self.app.processEvents()
+            time.sleep(0.02)
+        return bool(self.errors)
+
+    def fake_ffmpeg(self, body: str) -> str:
+        path = Path(self.tmp.name) / "ffmpeg"
+        path.write_text("#!/bin/sh\n" + body + "\n")
+        path.chmod(0o755)
+        return str(path)
+
+    def test_exit_is_reported_with_stderr(self):
+        ffmpeg = self.fake_ffmpeg("echo 'Invalid argument' >&2; exit 1")
+        self.processor.start_output(ffmpeg, "/dev/null", 1280, 720, 30)
+        self.assertTrue(self.wait_for_error(5))
+        self.assertIn("Invalid argument", self.errors[0])
+        self.assertIsNone(self.processor.output_pid)
+
+    def test_silent_exit_still_reported(self):
+        self.processor.start_output(self.fake_ffmpeg("exit 3"), "/dev/null", 1280, 720, 30)
+        self.assertTrue(self.wait_for_error(5))
+        self.assertIn("3", self.errors[0])
+
+    def test_deliberate_stop_is_not_an_error(self):
+        self.processor.start_output(self.fake_ffmpeg("cat > /dev/null"), "/dev/null", 1280, 720, 30)
+        self.processor.stop_output()
+        self.assertFalse(self.wait_for_error(0.5))
+        self.assertEqual(self.errors, [])
 
 
 if __name__ == "__main__":

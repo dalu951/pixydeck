@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Processed virtual camera: FFmpeg's error output is drained and logged, and an FFmpeg exit is detected right away – PixyDeck shows the error and resets to *Virtual cam off* instead of staying “on” with a stale frame rate
 - 28 GUI behaviour tests for the window and every mixin (fake controller, no camera or hardware access)
 - Split the 1,870-line `gui.py` into mixin modules (`controls`, `presets`, `background_panel`, `privacy`, `virtual_camera`, `constants`); UI verified pixel-identical
 
