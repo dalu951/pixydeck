@@ -15,7 +15,7 @@ from .backend import PixyController
 from .constants import AUTO_CONTROLS, IMAGE_AUTO, IMAGE_SLIDERS
 from .privacy import PACTL, set_pixy_microphone_muted
 from .vision import vision_available
-from .widgets import Card, Segmented, SettingRow, SliderRow, ToggleSwitch, section_title, set_state
+from .widgets import Card, Segmented, SettingRow, SliderRow, ToggleSwitch, set_state
 
 log = logging.getLogger(__name__)
 
@@ -33,43 +33,36 @@ def apply_controls(controller: PixyController, values: dict[str, int]) -> None:
 
 
 class ControlsMixin:
-    """On-board AI, focus, orientation and picture controls (AI & Image tabs)."""
+    """Tracking, calls, privacy and picture controls (Tracking, Calls and Image tabs)."""
 
-    def build_ai_tab(self) -> QWidget:
+    def build_tracking_tab(self) -> QWidget:
         page, layout = self.tab_page()
 
-        onboard = Card("PIXY on-board AI")
+        onboard = Card("Camera tracking")
         self.tracking = Segmented([("Off", "idle"), ("Face tracking", "track"), ("Privacy", "privacy")])
         self.tracking.selected.connect(self.set_tracking_mode)
         onboard.body.addWidget(self.tracking)
-        onboard.body.addWidget(section_title("Tracking keeps in frame"))
         self.target = Segmented([("Auto", "auto"), ("Face", "face"), ("Upper body", "upper-body")])
         self.target.selected.connect(self.set_target)
-        onboard.body.addWidget(self.target)
+        self.target.setToolTip("What tracking keeps in frame – Upper body copes better when you walk")
+        onboard.body.addWidget(SettingRow("Keep in frame", self.target))
         self.gesture = ToggleSwitch()
         self.gesture.toggled.connect(self.set_gesture)
-        onboard.body.addWidget(SettingRow("Gesture control", self.gesture, "Hand gestures steer the camera"))
-        onboard.body.addWidget(section_title("Microphone"))
-        self.audio = Segmented([("Noise cancel", "nc"), ("Live", "live"), ("Original", "org")])
-        self.audio.selected.connect(self.set_audio)
-        onboard.body.addWidget(self.audio)
+        onboard.body.addWidget(SettingRow("Gesture control", self.gesture))
         layout.addWidget(onboard)
 
-        focus = Card("AI focus")
+        focus = Card("Focus")
         self.focus_mode = Segmented([("Center", "center"), ("Face", "face"), ("Click point", "area")])
         self.focus_mode.selected.connect(self.set_focus_mode)
+        self.focus_mode.setToolTip("The PIXY's second lens steers autofocus and exposure. With “Click point”, "
+                                   "click anything in the preview to focus on it.")
         focus.body.addWidget(self.focus_mode)
-        focus.body.addWidget(self.hint(
-            "The PIXY's second lens steers autofocus and exposure. With “Click point”, "
-            "click anything in the preview – e.g. an object you hold up – to focus on it."))
         layout.addWidget(focus)
 
-        framing = Card("Auto-framing (software)")
+        framing = Card("Auto-framing", key="framing")
         self.autoframe = ToggleSwitch()
         self.autoframe.toggled.connect(self.set_autoframe)
-        self.autoframe_row = SettingRow(
-            "Auto-framing", self.autoframe,
-            "Digitally zooms and follows faces – also at 4K and in the processed virtual camera (F)")
+        self.autoframe_row = SettingRow("Digital auto-framing", self.autoframe, "Zooms and follows faces (F)")
         framing.body.addWidget(self.autoframe_row)
         self.framing = Segmented([("Wide", "wide"), ("Medium", "medium"), ("Tight", "tight")])
         self.framing.selected.connect(lambda v: self.settings.setValue("ai/framing", v))
@@ -83,57 +76,61 @@ class ControlsMixin:
             self.autoframe_row.hint.setText(
                 "Needs the optional AI extra: pip install 'pixydeck[ai]'")
         layout.addWidget(framing)
+        layout.addStretch()
+        return page
+
+    def build_calls_tab(self) -> QWidget:
+        page, layout = self.tab_page()
 
         calls = Card("Calls")
         self.calls_enabled = ToggleSwitch()
         self.calls_enabled.toggled.connect(self.calls_toggled)
         calls.body.addWidget(SettingRow(
-            "Detect calls", self.calls_enabled,
-            "A call starts when another app opens the PIXY and ends a few seconds after it lets go"))
-        calls.body.addWidget(section_title("When a call starts"))
+            "Detect calls", self.calls_enabled, "When Meet, Zoom, Teams, WhatsApp … open the camera"))
         self.calls_start = Segmented([("Face tracking", "track"), ("Keep mode", "keep")])
         self.calls_start.selected.connect(lambda v: self.settings.setValue("calls/start", v))
-        calls.body.addWidget(self.calls_start)
+        calls.body.addWidget(SettingRow("At the start", self.calls_start))
+        self.calls_privacy = ToggleSwitch()
+        self.calls_privacy.toggled.connect(lambda v: self.settings.setValue("calls/privacy", v))
+        calls.body.addWidget(SettingRow("Privacy when the call ends", self.calls_privacy))
         self.calls_mic = ToggleSwitch()
         self.calls_mic.toggled.connect(lambda v: self.settings.setValue("calls/microphone", v))
         self.calls_mic.setEnabled(bool(PACTL))
-        calls.body.addWidget(SettingRow(
-            "Use the PIXY microphone", self.calls_mic,
-            "Makes it the default input during the call and switches back afterwards"
-            if PACTL else "pactl not found"))
-        self.calls_privacy = ToggleSwitch()
-        self.calls_privacy.toggled.connect(lambda v: self.settings.setValue("calls/privacy", v))
-        calls.body.addWidget(SettingRow(
-            "Privacy when the call ends", self.calls_privacy, "The lens turns away"))
+        self.calls_mic.setToolTip("Makes the PIXY the default input during a call and switches back afterwards"
+                                  if PACTL else "pactl not found")
+        calls.body.addWidget(SettingRow("Use the PIXY microphone", self.calls_mic))
         self.calls_status = QLabel("", objectName="subtle")
+        self.calls_status.setWordWrap(True)
         calls.body.addWidget(self.calls_status)
         layout.addWidget(calls)
 
         privacy = Card("Privacy timer")
         self.privacy_enabled = ToggleSwitch()
         self.privacy_enabled.toggled.connect(lambda v: self.settings.setValue("privacy/enabled", v))
-        privacy.body.addWidget(SettingRow(
-            "Enter privacy when idle", self.privacy_enabled,
-            "The lens turns away when no app has used the camera for a while"))
         self.privacy_minutes = QSpinBox()
         self.privacy_minutes.setRange(1, 240)
         self.privacy_minutes.setSuffix(" min")
         self.privacy_minutes.valueChanged.connect(lambda v: self.settings.setValue("privacy/minutes", v))
+        privacy.body.addWidget(SettingRow("Privacy when idle", self.privacy_enabled,
+                                          "The lens turns away when no app uses the camera"))
         privacy.body.addWidget(SettingRow("Idle time", self.privacy_minutes))
         self.privacy_wake = ToggleSwitch()
         self.privacy_wake.toggled.connect(lambda v: self.settings.setValue("privacy/wake", v))
-        privacy.body.addWidget(SettingRow(
-            "Wake when an app needs the camera", self.privacy_wake,
-            "Leaves privacy mode as soon as Zoom, Teams, Meet, OBS … open the PIXY"))
-        self.privacy_mic = ToggleSwitch()
-        self.privacy_mic.toggled.connect(lambda v: self.settings.setValue("privacy/mute_mic", v))
-        self.privacy_mic.setEnabled(bool(PACTL))
-        privacy.body.addWidget(SettingRow(
-            "Mute PIXY microphone in privacy", self.privacy_mic,
-            "Via PipeWire/PulseAudio" if PACTL else "pactl not found"))
+        privacy.body.addWidget(SettingRow("Wake when an app needs the camera", self.privacy_wake))
         self.privacy_status = QLabel("", objectName="subtle")
         privacy.body.addWidget(self.privacy_status)
         layout.addWidget(privacy)
+
+        microphone = Card("Microphone")
+        self.audio = Segmented([("Noise cancel", "nc"), ("Live", "live"), ("Original", "org")])
+        self.audio.selected.connect(self.set_audio)
+        microphone.body.addWidget(self.audio)
+        self.privacy_mic = ToggleSwitch()
+        self.privacy_mic.toggled.connect(lambda v: self.settings.setValue("privacy/mute_mic", v))
+        self.privacy_mic.setEnabled(bool(PACTL))
+        self.privacy_mic.setToolTip("Via PipeWire/PulseAudio" if PACTL else "pactl not found")
+        microphone.body.addWidget(SettingRow("Mute in privacy mode", self.privacy_mic))
+        layout.addWidget(microphone)
         layout.addStretch()
         return page
 
@@ -147,9 +144,23 @@ class ControlsMixin:
             row.value_changed.connect(lambda v, c=control: self.set_image_control(c, v))
             picture.body.addWidget(row)
             self.image_sliders[control] = row
+        reset = QPushButton("Reset to camera defaults")
+        reset.clicked.connect(self.reset_image)
+        picture.body.addWidget(reset)
         layout.addWidget(picture)
 
-        auto = Card("Automatic modes")
+        stabilize = Card("Stabilization")
+        self.stabilize = ToggleSwitch()
+        self.stabilize.toggled.connect(self.set_stabilization)
+        self.stabilize_row = SettingRow("Steady picture", self.stabilize, "Cancels shake from a wobbling desk")
+        self.stabilize.setToolTip("Uses an 8 % digital zoom as reserve; pans and PTZ moves pass through")
+        stabilize.body.addWidget(self.stabilize_row)
+        if not vision_available():
+            self.stabilize.setEnabled(False)
+            self.stabilize_row.hint.setText("Needs the optional AI extra (OpenCV).")
+        layout.addWidget(stabilize)
+
+        auto = Card("Exposure, white balance, focus", key="auto", collapsed=True)
         self.auto_toggles: dict[str, ToggleSwitch] = {}
         for label, auto_control, values, manual, slider_label, unit in IMAGE_AUTO:
             toggle = ToggleSwitch()
@@ -165,22 +176,20 @@ class ControlsMixin:
         self.backlight.toggled.connect(
             lambda on: self.set_image_control("backlight_compensation", 2 if on else 1))
         auto.body.addWidget(SettingRow("Backlight compensation", self.backlight))
+        self.lock_toggles: dict[str, ToggleSwitch] = {}
+        for name, label in (
+            ("exposure", "Lock exposure"),
+            ("white-balance", "Lock white balance"),
+            ("focus", "Lock focus"),
+        ):
+            toggle = ToggleSwitch()
+            toggle.toggled.connect(lambda on, n=name: self.set_lock(n, on))
+            toggle.setToolTip("Holds the current value, so the picture does not pump when you lean in")
+            auto.body.addWidget(SettingRow(label, toggle))
+            self.lock_toggles[name] = toggle
         layout.addWidget(auto)
 
-        stabilize = Card("Stabilization")
-        self.stabilize = ToggleSwitch()
-        self.stabilize.toggled.connect(self.set_stabilization)
-        self.stabilize_row = SettingRow(
-            "Steady picture", self.stabilize,
-            "Cancels shake, e.g. from a wobbling monitor or desk. Uses an 8 % digital zoom "
-            "as reserve; pans and PTZ moves pass through.")
-        stabilize.body.addWidget(self.stabilize_row)
-        if not vision_available():
-            self.stabilize.setEnabled(False)
-            self.stabilize_row.hint.setText("Needs the optional AI extra (OpenCV).")
-        layout.addWidget(stabilize)
-
-        orientation = Card("Orientation")
+        orientation = Card("Orientation and flicker", key="orientation", collapsed=True)
         self.feature_toggles: dict[str, ToggleSwitch] = {}
         for name, label, hint in (
             ("hflip", "Mirror horizontally", None),
@@ -191,33 +200,10 @@ class ControlsMixin:
             toggle.toggled.connect(lambda on, n=name: self.set_feature(n, on))
             orientation.body.addWidget(SettingRow(label, toggle, hint))
             self.feature_toggles[name] = toggle
-        layout.addWidget(orientation)
-
-        locks = Card("Locks")
-        self.lock_toggles: dict[str, ToggleSwitch] = {}
-        for name, label in (
-            ("exposure", "Lock exposure"),
-            ("white-balance", "Lock white balance"),
-            ("focus", "Lock focus"),
-        ):
-            toggle = ToggleSwitch()
-            toggle.toggled.connect(lambda on, n=name: self.set_lock(n, on))
-            locks.body.addWidget(SettingRow(label, toggle))
-            self.lock_toggles[name] = toggle
-        locks.body.addWidget(self.hint(
-            "Freezes the camera's automatic adjustment at the current value, e.g. so the "
-            "picture does not pump when you lean in or hold something up."))
-        layout.addWidget(locks)
-
-        power = Card("Anti-flicker")
         self.flicker = Segmented([("Off", "off"), ("50 Hz", "50"), ("60 Hz", "60")])
         self.flicker.selected.connect(self.set_flicker)
-        power.body.addWidget(self.flicker)
-        layout.addWidget(power)
-
-        reset = QPushButton("Reset picture to camera defaults")
-        reset.clicked.connect(self.reset_image)
-        layout.addWidget(reset)
+        orientation.body.addWidget(SettingRow("Anti-flicker", self.flicker))
+        layout.addWidget(orientation)
         layout.addStretch()
         return page
 

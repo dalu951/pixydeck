@@ -311,11 +311,23 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
 
         self.tabs = QTabWidget()
         self.tabs.setFixedWidth(420)
-        self.tabs.addTab(self.scroll(self.build_camera_tab()), "Camera")
-        self.tabs.addTab(self.scroll(self.build_ai_tab()), "AI && Privacy")
-        self.tabs.addTab(self.scroll(self.build_image_tab()), "Image")
-        self.tabs.addTab(self.scroll(self.build_background_tab()), "Background")
-        self.tabs.addTab(self.scroll(self.build_output_tab()), "Output")
+        for build, name in (
+            (self.build_camera_tab, "Camera"),
+            (self.build_tracking_tab, "Tracking"),
+            (self.build_image_tab, "Image"),
+            (self.build_background_tab, "Effects"),
+            (self.build_calls_tab, "Calls"),
+            (self.build_output_tab, "Output"),
+        ):
+            self.tabs.addTab(self.scroll(build()), name)
+        self.tabs.setCurrentIndex(max(0, min(self.tabs.count() - 1, self.int_setting("ui/tab", 0))))
+        self.tabs.currentChanged.connect(lambda index: self.settings.setValue("ui/tab", index))
+        for card in self.tabs.findChildren(Card):
+            if card.key:
+                saved = self.settings.value(f"ui/expanded/{card.key}")
+                if saved is not None:
+                    card.set_expanded(str(saved).lower() == "true", notify=False)
+                card.toggled.connect(lambda expanded, k=card.key: self.settings.setValue(f"ui/expanded/{k}", expanded))
         outer.addWidget(self.tabs)
 
         self.statusBar().showMessage("Ready")
@@ -388,21 +400,22 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
             row.addWidget(button)
             self.preset_buttons.append(button)
         presets.body.addLayout(row)
-        presets.body.addWidget(self.hint(
-            "Click an empty slot to store the current position, a filled one to go there. "
-            "Right-click for more · keys 1–4 recall, Ctrl+1–4 store."))
+        presets.body.addWidget(self.hint("Click an empty slot to store, a filled one to go there · right-click for more"))
+        layout.addWidget(presets)
+
+        startup = Card("Startup position", key="startup", collapsed=True)
         self.startup_position = QComboBox()
         self.startup_position.addItem("Last position", "last")
         for slot in range(1, PRESET_SLOTS + 1):
             self.startup_position.addItem(f"Preset {slot}", str(slot))
         self.startup_position.currentIndexChanged.connect(self.startup_position_changed)
-        presets.body.addWidget(SettingRow("Position at startup", self.startup_position))
+        startup.body.addWidget(SettingRow("When PixyDeck starts", self.startup_position))
         power_on = QPushButton("Save as camera power-on position")
         power_on.setToolTip("The PIXY itself turns to the current position when it powers on – "
                             "also without PixyDeck and on other computers")
         power_on.clicked.connect(self.save_power_on_position)
-        presets.body.addWidget(power_on)
-        layout.addWidget(presets)
+        startup.body.addWidget(power_on)
+        layout.addWidget(startup)
         layout.addStretch()
         return page
 

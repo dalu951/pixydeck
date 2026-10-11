@@ -24,17 +24,17 @@ class BackgroundMixin:
     def build_background_tab(self) -> QWidget:
         page, layout = self.tab_page()
 
-        screen = Card("Background replacement")
+        screen = Card("Background")
         self.bg_mode = Segmented([("Off", "off"), ("Auto", "auto"), ("Green screen", "chroma"), ("AI", "ai")])
         self.bg_mode.selected.connect(lambda _m: self.apply_background())
         screen.body.addWidget(self.bg_mode)
         self.bg_status = QLabel("", objectName="subtle")
         self.bg_status.setWordWrap(True)
         screen.body.addWidget(self.bg_status)
-        screen.body.addWidget(self.hint(
-            "Green screen keys the exact shade it detects at the picture's edges. AI cuts you "
-            "out of any room (more CPU, up to 30 fps). Auto uses the green screen when one is "
-            "in view and AI otherwise. Works in the preview and the processed virtual camera."))
+        self.bg_mode.setToolTip(
+            "Green screen keys the shade it detects at the picture's edges. AI cuts you out of any "
+            "room (more CPU, up to 30 fps). Auto uses the green screen when one is in view, AI otherwise.")
+        screen.body.addWidget(self.hint("Shown in the preview and in “PixyDeck Virtual Camera”."))
         layout.addWidget(screen)
 
         fill = Card("Replace with")
@@ -57,7 +57,7 @@ class BackgroundMixin:
         fill.body.addWidget(self.bg_blur)
         layout.addWidget(fill)
 
-        tuning = Card("Green screen fine-tuning")
+        tuning = Card("Green screen fine-tuning", key="chroma", collapsed=True)
         self.bg_similarity = SliderRow("Similarity", 5, 45, 20, fmt=lambda v: f"{v}%")
         self.bg_smoothness = SliderRow("Edge softness", 2, 40, 10, fmt=lambda v: f"{v}%")
         self.bg_spill = SliderRow("Green spill removal", 0, 100, 70, fmt=lambda v: f"{v}%")
@@ -65,9 +65,8 @@ class BackgroundMixin:
             row.slider.sliderReleased.connect(self.apply_background)
             row.slider.valueChanged.connect(lambda _v: self.background_timer.start())
             tuning.body.addWidget(row)
-        tuning.body.addWidget(self.hint(
-            "Raise similarity if green remains, lower it if parts of you disappear. "
-            "Spill removal takes the green tint off hair and edges."))
+        self.bg_similarity.setToolTip("Raise if green remains, lower if parts of you disappear")
+        self.bg_spill.setToolTip("Takes the green tint off hair and edges")
         layout.addWidget(tuning)
 
         self.background_timer = QTimer(self, singleShot=True, interval=120)

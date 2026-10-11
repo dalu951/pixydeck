@@ -58,7 +58,7 @@ Python `>=3.10`.
 | Module | Responsibility |
 | --- | --- |
 | `gui.py` | `PixyGUI` window: layout, preview, zoom, pan/tilt, auto-framing, snapshot, startup |
-| `controls.py` | `ControlsMixin` – on-board AI, focus, orientation, picture controls (AI & Image tabs) |
+| `controls.py` | `ControlsMixin` – tracking, focus, calls/privacy cards, picture controls (Tracking, Calls & Image tabs) |
 | `presets.py` | `PresetsMixin` – pan/tilt/zoom presets and startup position |
 | `background_panel.py` | `BackgroundMixin` – green screen / AI background and its tab |
 | `privacy.py` | `PrivacyMixin` – privacy timer, wake on camera use, mic mute |

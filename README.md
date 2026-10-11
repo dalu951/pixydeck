@@ -47,11 +47,11 @@ stabilization and a virtual camera for Meet, Zoom, Teams and OBS – in one nati
 <details>
 <summary><b>Screenshots</b></summary>
 
-| Camera | AI & Privacy | Image |
+| Camera | Tracking | Image |
 | --- | --- | --- |
-| <img src="docs/media/camera.png" alt="Camera tab"> | <img src="docs/media/ai.png" alt="AI and privacy tab"> | <img src="docs/media/image.png" alt="Image tab"> |
-| **Background** | **Output** | **Setup** |
-| <img src="docs/media/background.png" alt="Background tab"> | <img src="docs/media/output.png" alt="Output tab"> | <img src="docs/media/setup.png" alt="Setup dialog"> |
+| <img src="docs/media/camera.png" alt="Camera tab"> | <img src="docs/media/ai.png" alt="Tracking tab"> | <img src="docs/media/image.png" alt="Image tab"> |
+| **Effects** | **Output** | **Setup** |
+| <img src="docs/media/background.png" alt="Effects tab"> | <img src="docs/media/output.png" alt="Output tab"> | <img src="docs/media/setup.png" alt="Setup dialog"> |
 
 </details>
 

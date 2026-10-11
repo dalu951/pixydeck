@@ -26,6 +26,9 @@ QMainWindow, QDialog, QWidget#root {{ background: #0f1115; color: #e6e8ee; }}
 QWidget {{ color: #e6e8ee; }}
 QLabel#title {{ font-size: 15pt; font-weight: 700; letter-spacing: 0.5px; }}
 QLabel#subtle {{ color: #8b93a7; }}
+QPushButton#cardHeader {{ background: transparent; border: none; padding: 0; text-align: left;
+    color: #8b93a7; font-size: 8.5pt; font-weight: 700; letter-spacing: 1px; }}
+QPushButton#cardHeader:hover {{ color: #c9d1e3; }}
 QLabel#sectionTitle {{ color: #8b93a7; font-size: 8.5pt; font-weight: 700;
     letter-spacing: 1px; padding-top: 4px; }}
 QFrame#card {{ background: #171a21; border: 1px solid #232733; border-radius: 14px; }}
@@ -97,14 +100,51 @@ def section_title(text: str) -> QLabel:
 
 
 class Card(QFrame):
-    def __init__(self, title: str | None = None, parent=None) -> None:
+    """A titled group of settings.
+
+    ``key`` makes it collapsible: the title becomes a button that folds the
+    content away, and ``collapsed`` is the initial state. ``toggled`` reports
+    the new state so the window can remember it.
+    """
+
+    toggled = Signal(bool)  # True = expanded
+
+    def __init__(self, title: str | None = None, parent=None, key: str | None = None,
+                 collapsed: bool = False) -> None:
         super().__init__(parent)
         self.setObjectName("card")
-        self.body = QVBoxLayout(self)
-        self.body.setContentsMargins(14, 10, 14, 14)
+        self.key = key
+        self._title = title or ""
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(14, 10, 14, 14)
+        outer.setSpacing(8)
+        self.header = None
+        if title and key:
+            self.header = QPushButton(objectName="cardHeader")
+            self.header.setCursor(Qt.PointingHandCursor)
+            self.header.setFocusPolicy(Qt.NoFocus)
+            self.header.clicked.connect(lambda: self.set_expanded(not self.expanded))
+            outer.addWidget(self.header)
+        elif title:
+            outer.addWidget(section_title(title))
+        self.content = QWidget()
+        self.body = QVBoxLayout(self.content)
+        self.body.setContentsMargins(0, 0, 0, 0)
         self.body.setSpacing(8)
-        if title:
-            self.body.addWidget(section_title(title))
+        outer.addWidget(self.content)
+        self.set_expanded(not collapsed, notify=False)
+
+    @property
+    def expanded(self) -> bool:
+        return not self.content.isHidden()
+
+    def set_expanded(self, expanded: bool, notify: bool = True) -> None:
+        self.content.setHidden(not expanded)
+        if self.header is not None:
+            self.header.setText(("▾  " if expanded else "▸  ") + self._title.upper())
+            self.header.setToolTip("Hide these settings" if expanded else "Show these settings")
+        if notify:
+            self.toggled.emit(expanded)
 
 
 class ToggleSwitch(QAbstractButton):

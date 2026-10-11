@@ -4,44 +4,51 @@
 
 <img src="../media/camera.png" width="860" alt="PixyDeck-Hauptfenster">
 
-Links liegt die Live-Vorschau, rechts fünf Tabs. Die Kopfzeile zeigt die Kamera, Statusanzeigen (Tracking, virtuelle Kamera, Apps, die gerade die Kamera nutzen) und **⚙ Setup**.
+Links liegt die Live-Vorschau, rechts sechs Tabs. Die Kopfzeile zeigt die Kamera, Statusanzeigen (Tracking, virtuelle Kamera, Apps, die gerade die Kamera nutzen) und **⚙ Setup**.
 
 ## Tab „Camera“ – ausrichten, zoomen, Positionen
 
 - **Schwenk-Feld:** klicken oder ziehen, um die Kamera auszurichten; der Punkt zeigt, wohin sie schaut. Nach unten geht es nur bis −52°, darunter würde die Kamera nur in ihre Ruheposition fahren.
 - **Pfeiltasten / Pfeil-Buttons:** gedrückt halten zum Gleiten – je länger, desto schneller.
 - **Im Vorschaubild:** ziehen zum Ausrichten (bzw. zum Verschieben des Ausschnitts beim Digitalzoom), Doppelklick zentriert eine Stelle, Mausrad zoomt.
-- **Motorgeschwindigkeit:** wie schnell die Kamera dreht (1–240 °/s, Standard 60) – langsam für ruhige Schwenks im Livestream, schnell zum Anfahren einer Position. Gilt auch für das Tracking.
+- **Motorgeschwindigkeit:** wie schnell die Kamera dreht (1–240 °/s, Standard 60) – langsam für ruhige Schwenks im Livestream, schnell zum Anfahren einer Position. Das Tracking der Kamera nutzt sie ebenfalls; verliert es dich beim Gehen, einen hohen Wert wählen.
 - **Zoom-Regler (1×–4×):** nutzt den Hardware-Zoom der PIXY (bis 1,5×), wo der Videomodus ihn unterstützt – unter 1080p und bei 1080p30 – und darüber digitalen Zoom.
-- **Positionen 1–4:** leeren Platz anklicken speichert die aktuelle Position, ein belegter fährt sie an; Rechtsklick für mehr. *Position at startup* legt fest, wohin die Kamera beim Start fährt. **Save as camera power-on position** speichert die aktuelle Ausrichtung in der Kamera selbst – sie startet dann dort, auch ohne PixyDeck oder an einem anderen Rechner.
+- **Positionen 1–4:** leeren Platz anklicken speichert die aktuelle Position, ein belegter fährt sie an; Rechtsklick für mehr.
+- **Startup position** (eingeklappt): wohin die Kamera beim Start von PixyDeck fährt; **Save as camera power-on position** speichert die aktuelle Ausrichtung in der Kamera selbst – sie startet dann dort, auch ohne PixyDeck oder an einem anderen Rechner.
 
-## Tab „AI & Privacy“
+Selten gebrauchte Einstellungen liegen in eingeklappten Karten (▸); ein Klick auf den Titel öffnet sie. PixyDeck merkt sich, welche Karten offen sind, und den zuletzt benutzten Tab.
 
-<img src="../media/ai.png" width="860" alt="Tab KI und Privatsphäre">
+## Tab „Tracking“
 
-- **KI der PIXY:** *Off*, *Face tracking* (die Kamera folgt dir mechanisch) oder *Privacy* (die Linse dreht weg). *Tracking keeps in frame* bestimmt, worauf das Tracking der Kamera achtet: *Auto*, *Face* (Gesicht) oder *Upper body* (Oberkörper). Außerdem Gestensteuerung und der Mikrofonmodus (Geräuschunterdrückung, Live, Original). Änderungen per Handgeste erscheinen nach etwa drei Sekunden auch in der App.
-- **KI-Fokus:** *Center*, *Face* oder *Click point* – dann irgendetwas im Vorschaubild anklicken, z. B. einen Gegenstand, den du in die Kamera hältst; die zweite Linse der PIXY stellt darauf scharf (gelbe Markierung).
+<img src="../media/ai.png" width="860" alt="Tab Tracking">
+
+- **Camera tracking:** *Off*, *Face tracking* (die Kamera folgt dir mechanisch) oder *Privacy* (die Linse dreht weg). *Keep in frame* bestimmt, worauf das Tracking achtet: *Auto*, *Face* (Gesicht) oder *Upper body* (Oberkörper) – der Oberkörper klappt beim Gehen besser. Änderungen per Handgeste erscheinen nach etwa drei Sekunden auch in der App.
+- **Focus:** *Center*, *Face* oder *Click point* – dann irgendetwas im Vorschaubild anklicken, z. B. einen Gegenstand, den du in die Kamera hältst; die zweite Linse der PIXY stellt darauf scharf (gelbe Markierung).
 - **Auto-Framing (Software):** zoomt digital und folgt Gesichtern. *Wide*, *Medium*, *Tight* bestimmen, wie nah; *Show detected faces* zeigt die erkannten Gesichter.
-- **Anrufe:** Mit *Detect calls* bemerkt PixyDeck, wenn Zoom, Teams, Meet, OBS … die PIXY (oder die virtuelle Kamera) öffnen. Beim Anrufbeginn schaltet es das Face-Tracking ein (mit *Keep mode* verlässt es nur den Privacy-Modus) und kann das PIXY-Mikrofon zum Standard-Eingang machen; ein paar Sekunden nachdem die letzte App die Kamera freigibt, dreht die Linse weg (*Privacy when the call ends*) und das vorherige Mikrofon wird wiederhergestellt. Ein kurzer Gerätetest des Browsers zählt nicht als Anruf.
-- **Privacy-Timer:** geht nach der eingestellten Leerlaufzeit in den Privacy-Modus, verlässt ihn automatisch, sobald eine andere App (Zoom, Teams, Meet, OBS …) die Kamera öffnet, und kann dabei das PIXY-Mikrofon stummschalten. Solange die Vorschau sichtbar ist, pausiert der Timer.
 
 <img src="../media/autoframe.gif" width="640" alt="Auto-Framing">
 
 ## Tab „Image“
 
-Helligkeit, Kontrast, Sättigung, Farbton, Schärfe, Gamma und Verstärkung; Weißabgleich, Belichtung und Fokus automatisch oder manuell; Gegenlichtausgleich; **Stabilisierung** (*Steady picture*, nutzt 8 % digitale Reserve gegen Wackeln); Spiegeln, vertikal Kippen und automatisches Drehen bei Überkopf-Montage; **Sperren**, die Belichtung, Weißabgleich oder Fokus beim aktuellen Wert festhalten (damit das Bild nicht pumpt, wenn du dich vorbeugst oder etwas in die Kamera hältst); Flimmerschutz (50/60 Hz). *Reset picture* stellt die Werkseinstellungen der Kamera wieder her.
+Helligkeit, Kontrast, Sättigung, Farbton, Schärfe, Gamma und Verstärkung mit *Reset to camera defaults*; **Stabilisierung** (*Steady picture*, nutzt 8 % digitale Reserve gegen Wackeln). Eingeklappt: Weißabgleich, Belichtung und Fokus automatisch oder manuell, Gegenlichtausgleich und **Sperren**, die Belichtung, Weißabgleich oder Fokus beim aktuellen Wert festhalten (damit das Bild nicht pumpt, wenn du dich vorbeugst oder etwas in die Kamera hältst); Spiegeln, vertikal Kippen, automatisches Drehen bei Überkopf-Montage und Flimmerschutz (50/60 Hz).
 
-## Tab „Background“
+## Tab „Effects“
 
 <img src="../media/background.gif" width="640" alt="Hintergrund ersetzen">
 
 | Modus | Was passiert |
 | --- | --- |
 | **AI** | Robust Video Matting stellt dich in jedem Raum frei (bis etwa 30 fps, mehr CPU) |
-| **Green screen** | stanzt genau den Grünton aus, der am Bildrand erkannt wird; Ähnlichkeit, Kantenweichheit und Grünstich-Entfernung lassen sich nachregeln |
+| **Green screen** | stanzt genau den Grünton aus, der am Bildrand erkannt wird; Ähnlichkeit, Kantenweichheit und Grünstich-Entfernung lassen sich nachregeln (eingeklappt) |
 | **Auto** | Green Screen, solange einer im Bild ist, sonst KI |
 
-Gefüllt wird mit **Unschärfe**, **Verlauf**, **Farbe** oder einem eigenen **Bild**. Die Effekte erscheinen in der Vorschau, in Schnappschüssen und in der verarbeiteten virtuellen Kamera.
+Gefüllt wird mit **Unschärfe**, **Verlauf**, **Farbe** oder einem eigenen **Bild**. Die Effekte erscheinen in der Vorschau, in Schnappschüssen und in der verarbeiteten virtuellen Kamera – eine App, die die PIXY direkt öffnet, sieht sie nicht.
+
+## Tab „Calls“
+
+- **Anrufe:** Mit *Detect calls* bemerkt PixyDeck, wenn Meet, Zoom, Teams, WhatsApp, OBS … die PIXY oder die virtuelle Kamera öffnen (oben steht dann *📞 Call*). Zu Beginn schaltet es das Face-Tracking ein (mit *Keep mode* verlässt es nur den Privacy-Modus) und kann das PIXY-Mikrofon zum Standard-Eingang machen; ein paar Sekunden nachdem die letzte App die Kamera freigibt, dreht die Linse weg (*Privacy when the call ends*) und das vorherige Mikrofon wird wiederhergestellt. Ein kurzer Gerätetest des Browsers zählt nicht als Anruf. Liest die App die PIXY direkt, während Effekte aktiv sind, weist PixyDeck auf die virtuelle Kamera hin.
+- **Privacy-Timer:** geht nach der eingestellten Leerlaufzeit in den Privacy-Modus und verlässt ihn, sobald eine andere App die Kamera öffnet. Solange die Vorschau sichtbar ist, pausiert er.
+- **Mikrofon:** DSP-Modus der PIXY (Geräuschunterdrückung, Live, Original) und Stummschalten im Privacy-Modus.
 
 ## Tab „Output“ – PixyDeck in anderen Apps nutzen
 
@@ -49,7 +56,7 @@ Gefüllt wird mit **Unschärfe**, **Verlauf**, **Farbe** oder einem eigenen **Bi
 
 | Option | Wann |
 | --- | --- |
-| **Processed** (virtuelle Kamera) | In Meet, Zoom, Teams oder OBS *PixyDeck Virtual Camera* wählen. Was du in PixyDeck siehst – Zoom, Auto-Framing, Hintergrund, Stabilisierung – sehen auch die anderen. |
+| **Processed** (virtuelle Kamera) | In Meet, Zoom, Teams, WhatsApp oder OBS *PixyDeck Virtual Camera* wählen. Was du in PixyDeck siehst – Zoom, Auto-Framing, Hintergrund, Stabilisierung – sehen auch die anderen. Mit *Start with PixyDeck* ist sie immer verfügbar; solange PixyDeck kein Kamerabild hat (eine andere App hält die PIXY), zeigt sie einen Wartebildschirm, und dein Bild folgt, sobald die Kamera frei ist. |
 | **Direct** (virtuelle Kamera) | Geringste CPU-Last: FFmpeg reicht das Kamerabild unverändert durch; nur Hardware-Zoom. Bei 1080p 30 fps wählen, damit der Hardware-Zoom funktioniert. |
 | **Release camera** | Andere Apps öffnen die echte EMEET PIXY direkt; PixyDeck steuert Schwenken, KI und Bild weiter. |
 

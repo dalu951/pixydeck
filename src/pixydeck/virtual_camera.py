@@ -58,17 +58,18 @@ class VirtualCameraMixin:
         virtual.body.addLayout(buttons)
         self.virtual_autostart = ToggleSwitch()
         self.virtual_autostart.toggled.connect(lambda v: self.settings.setValue("virtual/autostart", v))
-        virtual.body.addWidget(SettingRow(
-            "Start with PixyDeck", self.virtual_autostart,
+        self.virtual_autostart.setToolTip(
             "Keeps “PixyDeck Virtual Camera” available, so Meet, WhatsApp or Teams can stay set to it. "
-            "While PixyDeck has no camera picture it shows a waiting screen."))
+            "While PixyDeck has no camera picture it shows a waiting screen.")
+        virtual.body.addWidget(SettingRow("Start with PixyDeck", self.virtual_autostart,
+                                          "Apps can stay set to the virtual camera"))
         self.virtual_device_status = QLabel("Device: checking…", objectName="subtle")
         self.virtual_status = QLabel("Pipeline: stopped", objectName="subtle")
         virtual.body.addWidget(self.virtual_device_status)
         virtual.body.addWidget(self.virtual_status)
         layout.addWidget(virtual)
 
-        direct = Card("Direct use by other apps")
+        direct = Card("Direct use by other apps", key="direct", collapsed=True)
         direct.body.addWidget(self.hint(
             "“Release camera” frees the physical PIXY so Meet, OBS or Teams can open it "
             "directly. Pan/tilt, tracking, privacy and picture controls keep working."))

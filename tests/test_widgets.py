@@ -65,12 +65,26 @@ class HelpersTest(unittest.TestCase):
         self.assertEqual(card.styleSheet(), widgets.THEME)
 
     def test_card_with_and_without_title(self):
+        from PySide6.QtWidgets import QLabel
         titled = widgets.Card("Camera")
         self.assertEqual(titled.objectName(), "card")
-        self.assertEqual(titled.body.count(), 1)
-        self.assertEqual(titled.body.itemAt(0).widget().text(), "CAMERA")
+        self.assertEqual(titled.body.count(), 0)  # the title sits above the body
+        self.assertEqual([label.text() for label in titled.findChildren(QLabel)], ["CAMERA"])
+        self.assertIsNone(titled.header)
         untitled = widgets.Card()
-        self.assertEqual(untitled.body.count(), 0)
+        self.assertEqual(untitled.findChildren(QLabel), [])
+
+    def test_collapsible_card(self):
+        card = widgets.Card("Locks", key="locks", collapsed=True)
+        card.body.addWidget(QLabel("content"))
+        rec = Recorder(card.toggled)
+        self.assertFalse(card.expanded)
+        self.assertEqual(card.header.text(), "▸  LOCKS")
+        card.header.click()
+        self.assertTrue(card.expanded)
+        self.assertEqual(card.header.text(), "▾  LOCKS")
+        card.set_expanded(False, notify=False)
+        self.assertEqual(rec.calls, [(True,)])
 
 
 class ToggleSwitchTest(unittest.TestCase):

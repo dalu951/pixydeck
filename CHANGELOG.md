@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Tidier window**: six task tabs (Camera, Tracking, Image, Effects, Calls, Output); rarely used settings in folded cards; long explanations moved to tooltips; the last tab and open cards are remembered
 - **Call detection** (AI & Privacy tab → *Calls*): when another app opens the PIXY or the virtual camera, tracking turns on; after the call the lens turns away. Optional: use the PIXY microphone as the default input during calls and switch back afterwards. Brief device probes by browsers are ignored (debounced)
 - **Virtual camera waiting screen**: while PixyDeck has no camera picture (another app holds the PIXY, or it is unplugged) the virtual camera shows a still, so Meet, WhatsApp or Teams can still select it; the real picture follows as soon as the camera is free
 - **Start the virtual camera with PixyDeck** (Output tab)

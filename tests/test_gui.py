@@ -401,6 +401,28 @@ class WindowTest(GuiTestCase):
         w.set_zoom(400)
         self.assertEqual(w.zoom_value, constants.HW_ZOOM_MAX)
 
+    def test_tabs_are_grouped_by_task(self):
+        tabs = self.window.tabs
+        self.assertEqual([tabs.tabText(i) for i in range(tabs.count())],
+                         ["Camera", "Tracking", "Image", "Effects", "Calls", "Output"])
+
+    def test_tab_and_folded_cards_are_remembered(self):
+        from pixydeck.widgets import Card
+        w = self.window
+        w.tabs.setCurrentIndex(4)
+        cards = {card.key: card for card in w.tabs.findChildren(Card) if card.key}
+        self.assertFalse(cards["auto"].expanded)       # rarely used: folded by default
+        self.assertTrue(cards["framing"].expanded)
+        cards["auto"].header.click()
+        cards["framing"].header.click()
+        self.close_window()
+        self.window = gui.PixyGUI()
+        self.controller = self.window.controller
+        cards = {card.key: card for card in self.window.tabs.findChildren(Card) if card.key}
+        self.assertEqual(self.window.tabs.currentIndex(), 4)
+        self.assertTrue(cards["auto"].expanded)
+        self.assertFalse(cards["framing"].expanded)
+
     def test_shortcuts_are_installed(self):
         from PySide6.QtGui import QShortcut
         keys = {s.key().toString() for s in self.window.findChildren(QShortcut)}

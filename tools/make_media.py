@@ -290,7 +290,7 @@ def screenshots(window, out: Path) -> None:
     window.view.set_processed(None)
     window.bg_mode.set_current("off")
 
-    window.tabs.setCurrentIndex(4)
+    window.tabs.setCurrentIndex(5)
     window.pill_virtual.setText("Virtual cam on")
     set_state(window.pill_virtual, "on")
     window.virtual_status.setText("Pipeline: processed – 1920 × 1080")

@@ -40,7 +40,7 @@ The installer is idempotent: it rebuilds the private virtualenv package, reinsta
 | HID access | `ls -l /dev/hidraw*` while PIXY is plugged in | the PIXY node is accessible to your user |
 | Virtual camera service | `systemctl is-active pixydeck-virtual-camera.service` | `active` |
 | Virtual camera device | `v4l2-ctl --list-devices` | `PixyDeck Virtual Camera` listed |
-| AI features | Background tab status | no "needs the optional AI extra" hint |
+| AI features | Effects tab status | no "needs the optional AI extra" hint |
 
 ## Common issues
 
