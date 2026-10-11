@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 28 GUI behaviour tests for the window and every mixin (fake controller, no camera or hardware access)
 - Split the 1,870-line `gui.py` into mixin modules (`controls`, `presets`, `background_panel`, `privacy`, `virtual_camera`, `constants`); UI verified pixel-identical
 
 ## 0.3.1 - 2026-10-10
