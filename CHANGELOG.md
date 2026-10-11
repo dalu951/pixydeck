@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.2 - 2026-10-11
 
 - Processed virtual camera: FFmpeg's error output is drained and logged, and an FFmpeg exit is detected right away – PixyDeck shows the error and resets to *Virtual cam off* instead of staying “on” with a stale frame rate
 - 28 GUI behaviour tests for the window and every mixin (fake controller, no camera or hardware access)
