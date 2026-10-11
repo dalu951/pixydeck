@@ -504,6 +504,7 @@ class FrameProcessor(QObject):
                 if process is not None and time.monotonic() - last_write >= PLACEHOLDER_AFTER:
                     try:
                         process.stdin.write(placeholder_frame(*self._output_size))
+                        process.stdin.flush()
                     except (BrokenPipeError, OSError, ValueError):
                         pass
                     if not self._placeholder:
@@ -530,6 +531,9 @@ class FrameProcessor(QObject):
                 continue
             try:
                 process.stdin.write(data)
+                # Whole frames only: Python 3.14 buffers up to 128 KiB, which
+                # would hold back small frames.
+                process.stdin.flush()
             except (BrokenPipeError, OSError, ValueError):
                 # FFmpeg is gone; _watch_output reports it with its stderr.
                 continue

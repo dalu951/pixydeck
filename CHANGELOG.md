@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1 - 2026-10-11
+
+- Virtual camera: every frame is flushed to FFmpeg at once; with Python 3.14's larger write buffer, small frames (such as the waiting screen) were held back
+
 ## 0.5.0 - 2026-10-11
 
 - **The virtual camera is now called “EMEET PIXY (PixyDeck)”**, so apps list it next to the real camera. A device with the old name “PixyDeck Virtual Camera” keeps working and is renamed the next time it is created (reboot, or Setup → Virtual camera → Fix while no app uses it)
