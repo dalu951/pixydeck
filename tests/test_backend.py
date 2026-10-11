@@ -306,6 +306,44 @@ class DiscoveryTest(unittest.TestCase):
             self.assertIsNone(backend.find_video_device(self.root))
 
 
+class VirtualCameraNameTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def node(self, index, name):
+        (self.root / f"video{index}").mkdir()
+        (self.root / f"video{index}" / "name").write_text(name + "\n")
+
+    def test_named_after_the_camera(self):
+        from pixydeck import VIRTUAL_CAMERA_NAME
+        self.assertEqual(VIRTUAL_CAMERA_NAME, "EMEET PIXY (PixyDeck)")
+        self.assertLessEqual(len(VIRTUAL_CAMERA_NAME), 31)  # v4l2 card name limit
+
+    def test_every_name_is_recognised_as_ours(self):
+        for name in ("EMEET PIXY (PixyDeck)", "PixyDeck Virtual Camera", "Dummy video device (virtual)"):
+            self.assertTrue(backend.is_virtual_camera(name), name)
+        for name in ("EMEET PIXY: EMEET PIXY", "Integrated Camera"):
+            self.assertFalse(backend.is_virtual_camera(name), name)
+
+    def test_current_name_wins_over_the_old_one(self):
+        self.node(20, "PixyDeck Virtual Camera")
+        self.assertEqual(backend.find_virtual_camera(self.root), "/dev/video20")
+        self.node(21, "EMEET PIXY (PixyDeck)")
+        self.assertEqual(backend.find_virtual_camera(self.root), "/dev/video21")
+
+    def test_no_virtual_camera(self):
+        self.node(0, "EMEET PIXY: EMEET PIXY")
+        self.assertIsNone(backend.find_virtual_camera(self.root))
+
+    def test_renamed_device_is_never_taken_for_the_real_camera(self):
+        self.node(0, "EMEET PIXY (PixyDeck)")
+        self.node(2, "EMEET PIXY: EMEET PIXY")
+        with mock.patch.object(backend, "_ioctl_get", return_value=0):
+            self.assertEqual(backend.find_video_device(self.root), "/dev/video2")
+
+
 class CameraUsersTest(unittest.TestCase):
     def test_finds_this_process_holding_a_device(self):
         with tempfile.NamedTemporaryFile() as device:

@@ -11,6 +11,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QColorDialog, QFileDialog, QHBoxLayout, QLabel, QPushButton, QWidget
 
+from . import VIRTUAL_CAMERA_NAME
 from .vision import Background, matting_available, vision_available
 from .widgets import Card, Segmented, SliderRow
 
@@ -34,7 +35,7 @@ class BackgroundMixin:
         self.bg_mode.setToolTip(
             "Green screen keys the shade it detects at the picture's edges. AI cuts you out of any "
             "room (more CPU, up to 30 fps). Auto uses the green screen when one is in view, AI otherwise.")
-        screen.body.addWidget(self.hint("Shown in the preview and in “PixyDeck Virtual Camera”."))
+        screen.body.addWidget(self.hint(f"Shown in the preview and in “{VIRTUAL_CAMERA_NAME}”."))
         layout.addWidget(screen)
 
         fill = Card("Replace with")

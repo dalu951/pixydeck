@@ -124,7 +124,7 @@ class SystemProbeTest(unittest.TestCase):
     def test_virtual_camera_device_looks_up_by_name(self):
         with mock.patch.object(setup.backend, "find_video_by_name", return_value="/dev/video42") as find:
             self.assertEqual(setup.virtual_camera_device(), "/dev/video42")
-        find.assert_called_once_with(setup.VIRTUAL_CAMERA_NAME)
+        self.assertEqual(find.call_args.args[0], setup.VIRTUAL_CAMERA_NAME)
 
     def test_helper_path_needs_executable_file(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -406,6 +406,85 @@ class HelperScriptTest(unittest.TestCase):
         for action in ("virtual-camera)", "udev)", "video-group)"):
             self.assertIn(action, text)
         self.assertNotIn("eval", text)
+
+
+
+class DeviceScriptTest(unittest.TestCase):
+    """deploy/virtual-camera-device against a fake sysfs and v4l2loopback-ctl."""
+
+    SCRIPT = ROOT / "deploy" / "virtual-camera-device"
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        self.sysfs, self.dev, self.log = root / "sys", root / "dev", root / "ctl.log"
+        (self.sysfs / "class" / "video4linux").mkdir(parents=True)
+        self.dev.mkdir()
+        self.busy = root / "busy"
+        self.ctl = root / "v4l2loopback-ctl"
+        self.ctl.write_text(
+            "#!/bin/sh\n"
+            f"echo \"$*\" >> '{self.log}'\n"
+            f"if [ \"$1\" = delete ] && [ -e '{self.busy}' ]; then exit 1; fi\n")
+        self.ctl.chmod(0o755)
+
+    def device(self, index, name):
+        node = self.sysfs / "class" / "video4linux" / f"video{index}"
+        node.mkdir()
+        (node / "name").write_text(name + "\n")
+        (self.dev / f"video{index}").touch()
+
+    def run_script(self, action):
+        env = {"PATH": "/usr/bin:/bin", "PIXYDECK_SYSFS": str(self.sysfs),
+               "PIXYDECK_DEV": str(self.dev), "PIXYDECK_LOOPBACK_CTL": str(self.ctl)}
+        return subprocess.run(["bash", str(self.SCRIPT), action], env=env, capture_output=True, text=True)
+
+    def calls(self):
+        return self.log.read_text().splitlines() if self.log.exists() else []
+
+    def test_creates_the_device_under_the_camera_name(self):
+        self.device(20, "Dummy video device")
+        result = self.run_script("start")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.calls(), [f"add -n EMEET PIXY (PixyDeck) -x 1 {self.dev}/video21"])
+
+    def test_existing_device_is_reused(self):
+        self.device(20, "EMEET PIXY (PixyDeck)")
+        self.assertEqual(self.run_script("start").stdout.strip(), f"{self.dev}/video20")
+        self.assertEqual(self.calls(), [])
+
+    def test_old_name_is_replaced(self):
+        self.device(20, "PixyDeck Virtual Camera")
+        (self.dev / "video20").unlink()  # the delete frees the node
+        self.assertEqual(self.run_script("start").returncode, 0)
+        self.assertEqual(self.calls(), [f"delete {self.dev}/video20",
+                                        f"add -n EMEET PIXY (PixyDeck) -x 1 {self.dev}/video20"])
+
+    def test_old_device_in_use_is_kept(self):
+        self.device(20, "PixyDeck Virtual Camera")
+        self.busy.touch()
+        result = self.run_script("start")
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), f"{self.dev}/video20")
+        self.assertEqual(self.calls(), [f"delete {self.dev}/video20"])
+
+    def test_stop_removes_both_names_and_tolerates_busy(self):
+        self.device(20, "EMEET PIXY (PixyDeck)")
+        self.device(21, "PixyDeck Virtual Camera")
+        self.busy.touch()
+        result = self.run_script("stop")
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(self.calls(), [f"delete {self.dev}/video20", f"delete {self.dev}/video21"])
+        self.assertIn("in use, kept", result.stderr)
+
+    def test_status(self):
+        self.assertEqual(self.run_script("status").returncode, 1)
+        self.device(22, "PixyDeck Virtual Camera")
+        self.assertEqual(self.run_script("status").returncode, 0)
+
+    def test_usage(self):
+        self.assertEqual(self.run_script("dance").returncode, 2)
 
 
 if __name__ == "__main__":

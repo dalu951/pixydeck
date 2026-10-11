@@ -581,7 +581,7 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
     def find_pixy_camera():
         for device in QMediaDevices.videoInputs():
             name = device.description().upper()
-            if "EMEET" in name and "PIXY" in name and "VIRTUAL" not in name:
+            if "EMEET" in name and "PIXY" in name and not backend.is_virtual_camera(device.description()):
                 return device
         return None
 

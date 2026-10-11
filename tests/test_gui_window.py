@@ -487,11 +487,11 @@ class CameraLifecycleTest(WindowCase):
     ]
 
     def test_finds_the_physical_pixy_only(self):
-        devices = [FakeDevice("Integrated Webcam"), FakeDevice("EMEET PIXY Virtual Camera"),
-                   FakeDevice("EMEET PIXY: EMEET PIXY")]
+        devices = [FakeDevice("Integrated Webcam"), FakeDevice("EMEET PIXY (PixyDeck)"),
+                   FakeDevice("PixyDeck Virtual Camera"), FakeDevice("EMEET PIXY: EMEET PIXY")]
         with mock.patch.object(gui.QMediaDevices, "videoInputs", return_value=devices):
-            self.assertIs(gui.PixyGUI.find_pixy_camera(), devices[2])
-        with mock.patch.object(gui.QMediaDevices, "videoInputs", return_value=devices[:2]):
+            self.assertIs(gui.PixyGUI.find_pixy_camera(), devices[3])
+        with mock.patch.object(gui.QMediaDevices, "videoInputs", return_value=devices[:3]):
             self.assertIsNone(gui.PixyGUI.find_pixy_camera())
 
     def test_resolutions_listed_once_with_best_frame_rate(self):

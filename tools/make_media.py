@@ -190,13 +190,13 @@ def demo_checks(all_ok: bool = False) -> list:
     rows = [("camera", "EMEET PIXY connected", "USB 328f:00c0 found"),
             ("hid", "Camera controls (tracking, privacy, focus …)", "/dev/hidraw0 is accessible"),
             ("module", "v4l2loopback kernel module", "available"),
-            ("virtual", "Virtual camera for Meet, Zoom, Teams, OBS", "PixyDeck Virtual Camera at /dev/video20"),
+            ("virtual", "Virtual camera for Meet, Zoom, Teams, OBS", "EMEET PIXY (PixyDeck) at /dev/video20"),
             ("group", "Permission to feed the virtual camera", "PixyDeck can send video to it."),
             ("ffmpeg", "FFmpeg", "installed"),
             ("ai", "AI features (auto-framing, background)", "OpenCV and ONNX Runtime available")]
     checks = [setup.Check(key, title, True, detail) for key, title, detail in rows]
     if not all_ok:
-        checks[3] = setup.Check("virtual", rows[3][1], False, "PixyDeck Virtual Camera does not exist yet.",
+        checks[3] = setup.Check("virtual", rows[3][1], False, "EMEET PIXY (PixyDeck) does not exist yet.",
                                 fix="virtual-camera")
     return checks
 

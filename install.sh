@@ -121,7 +121,7 @@ EMEET PixyDeck installed.
 
 Launch it from your application menu: EMEET PixyDeck
 CLI: $VENV/bin/pixydeck-cli
-In Meet/Zoom/Teams/OBS select: PixyDeck Virtual Camera
+In Meet/Zoom/Teams/OBS select: EMEET PIXY (PixyDeck)
 
 If HID controls are denied, unplug/replug the PIXY once (or log out/in).
 Virtual camera service status:

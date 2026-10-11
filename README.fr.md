@@ -31,7 +31,7 @@ stabilisation et une caméra virtuelle pour Meet, Zoom, Teams et OBS – dans un
 - 🎯 **IA embarquée de la PIXY** : suivi du visage, mode confidentialité, gestes, **mise au point par clic**, réduction de bruit du micro
 - 🔍 **Zoom jusqu'à 4×** : zoom matériel quand la PIXY le permet, zoom numérique net au-delà – même en 4K
 - 🪄 **Arrière-plan** : flou ou remplacement par IA sans fond vert ; détection automatique d'un fond vert
-- 🎥 **Caméra virtuelle** *PixyDeck Virtual Camera* avec tous les effets, pour toutes les applications vidéo
+- 🎥 **Caméra virtuelle** *EMEET PIXY (PixyDeck)* avec tous les effets, pour toutes les applications vidéo
 - 🫨 **Stabilisation**, 🔒 **minuterie de confidentialité**, 🎛️ **réglages d'image**, 🛠️ **assistant de configuration**
 
 ## Installation

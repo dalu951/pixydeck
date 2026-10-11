@@ -6,8 +6,9 @@ Start with **⚙ Setup** in PixyDeck – it checks permissions, the kernel modul
 
 | Symptom | Fix |
 | --- | --- |
-| **My meeting app does not see the camera** while PixyDeck shows a preview | Select **PixyDeck Virtual Camera** in the app, or click **Release camera** in PixyDeck and pick the physical EMEET PIXY. Only one program can read a webcam stream at a time. |
-| **"PixyDeck Virtual Camera" is missing** | ⚙ Setup → *Virtual camera* → **Fix**. If the dialog says the `v4l2loopback` module is missing, install `v4l2loopback-dkms` (plus kernel headers). After a kernel update, reboot first. |
+| **My meeting app does not see the camera** while PixyDeck shows a preview | Select **EMEET PIXY (PixyDeck)** in the app, or click **Release camera** in PixyDeck and pick the physical EMEET PIXY. Only one program can read a webcam stream at a time. |
+| **"EMEET PIXY (PixyDeck)" is missing** | ⚙ Setup → *Virtual camera* → **Fix**. If the dialog says the `v4l2loopback` module is missing, install `v4l2loopback-dkms` (plus kernel headers). After a kernel update, reboot first. |
+| **Apps still list "PixyDeck Virtual Camera"** | That is the same virtual camera under its name before 0.5.0. It is renamed when it is next created – after a restart, or ⚙ Setup → *Virtual camera* → **Fix** while no app uses it. Select it again in your apps afterwards. |
 | **Tracking, privacy or focus buttons do nothing** / "Permission denied" on `/dev/hidraw*` | ⚙ Setup → *Camera controls* → **Fix**, or unplug and replug the PIXY. |
 | **Preview froze** | PixyDeck restarts a stalled stream automatically after three seconds; *Release camera* → *Resume preview* also works. |
 | **Zoom slider is greyed out** | The camera is released to another app and the video mode ignores hardware zoom (above 1080p, or 1080p at 60 fps). Use the processed virtual camera for digital zoom. |

@@ -21,7 +21,7 @@ Current PIXY firmware ignores or does not answer those vendor commands. PixyDeck
 No. *AI* mode works in any room. A green screen gives the cleanest edges with the least CPU.
 
 **Can I use PixyDeck and Zoom at the same time?**
-Yes – select *PixyDeck Virtual Camera* in Zoom (effects included), or click *Release camera* and use the physical camera directly while PixyDeck keeps controlling it.
+Yes – select *EMEET PIXY (PixyDeck)* in Zoom (effects included), or click *Release camera* and use the physical camera directly while PixyDeck keeps controlling it.
 
 **Does PixyDeck need root?**
 Only once, for system integration (udev rules, the virtual-camera service). The app itself runs as your user; repairs go through a small helper with fixed actions behind the polkit password dialog.

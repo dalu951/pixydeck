@@ -77,7 +77,7 @@ def camera_connected() -> bool:
 
 
 def virtual_camera_device() -> str | None:
-    return backend.find_video_by_name(VIRTUAL_CAMERA_NAME)
+    return backend.find_virtual_camera()
 
 
 def loopback_module_available() -> bool:

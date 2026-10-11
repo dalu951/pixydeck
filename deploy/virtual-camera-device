@@ -1,18 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-NAME="PixyDeck Virtual Camera"
+NAME="EMEET PIXY (PixyDeck)"
+LEGACY_NAME="PixyDeck Virtual Camera"  # before 0.5.0
 START=20
 END=29
+# Overridable only for the test suite; systemd and pkexec run this with a clean environment.
+SYSFS="${PIXYDECK_SYSFS:-/sys}"
+DEV="${PIXYDECK_DEV:-/dev}"
+CTL="${PIXYDECK_LOOPBACK_CTL:-/usr/bin/v4l2loopback-ctl}"
 
 find_device() {
-    local path base name
+    local wanted="${1:-$NAME}" path base name
     shopt -s nullglob
-    for path in /sys/class/video4linux/video*/name; do
+    for path in "$SYSFS"/class/video4linux/video*/name; do
         name=$(cat "$path" 2>/dev/null || true)
-        if [[ "$name" == "$NAME" ]]; then
+        if [[ "$name" == "$wanted" ]]; then
             base=$(basename "$(dirname "$path")")
-            printf '/dev/%s\n' "$base"
+            printf '%s/%s\n' "$DEV" "$base"
             return 0
         fi
     done
@@ -25,11 +30,18 @@ start_device() {
         echo "$existing"
         return 0
     fi
+    # Rename a device left by an older version; keep it while an app uses it.
+    if existing=$(find_device "$LEGACY_NAME"); then
+        if ! "$CTL" delete "$existing" 2>/dev/null; then
+            echo "$existing"
+            return 0
+        fi
+    fi
 
     for n in $(seq "$START" "$END"); do
-        dev="/dev/video${n}"
+        dev="$DEV/video${n}"
         if [[ ! -e "$dev" ]]; then
-            /usr/bin/v4l2loopback-ctl add -n "$NAME" -x 1 "$dev"
+            "$CTL" add -n "$NAME" -x 1 "$dev"
             return 0
         fi
     done
@@ -39,17 +51,20 @@ start_device() {
 }
 
 stop_device() {
-    local existing
-    if existing=$(find_device); then
-        /usr/bin/v4l2loopback-ctl delete "$existing"
-    fi
+    local existing wanted
+    for wanted in "$NAME" "$LEGACY_NAME"; do
+        if existing=$(find_device "$wanted"); then
+            # A device an app still reads cannot be removed; leave it for now.
+            "$CTL" delete "$existing" || echo "$existing is in use, kept" >&2
+        fi
+    done
 }
 
 case "${1:-}" in
     start) start_device ;;
     stop)  stop_device ;;
     status)
-        if find_device; then exit 0; else exit 1; fi
+        if find_device || find_device "$LEGACY_NAME"; then exit 0; else exit 1; fi
         ;;
     *)
         echo "Usage: $0 start|stop|status" >&2

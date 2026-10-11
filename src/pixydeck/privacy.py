@@ -9,7 +9,8 @@ import os
 import shutil
 import subprocess
 
-from .backend import camera_users, video_nodes
+from . import VIRTUAL_CAMERA_NAME
+from .backend import camera_users, is_virtual_camera, video_nodes
 from .widgets import set_state
 
 
@@ -24,7 +25,7 @@ def pixy_video_nodes() -> list[str]:
 def physical_pixy_nodes() -> list[str]:
     """Only the real camera – an app here bypasses PixyDeck's effects."""
     return [device for device, name in video_nodes()
-            if "PIXY" in name.upper() and "VIRTUAL" not in name.upper()]
+            if "PIXY" in name.upper() and not is_virtual_camera(name)]
 
 
 def set_pixy_microphone_muted(muted: bool) -> bool:
@@ -188,7 +189,7 @@ class PrivacyMixin:
             return
         apps = ", ".join(sorted({name for _pid, name in users}))
         self.notify(f"{apps} reads the PIXY directly and does not see your effects – "
-                    f"choose “PixyDeck Virtual Camera” there", 15000)
+                    f"choose “{VIRTUAL_CAMERA_NAME}” there", 15000)
 
     def on_call_ended(self) -> None:
         if self.calls_privacy.isChecked():

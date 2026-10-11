@@ -2,4 +2,5 @@
 ACTION!="remove", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="328f", ATTRS{idProduct}=="00c0", MODE="0660", TAG+="uaccess"
 # PixyDeck virtual camera (v4l2loopback): let the active desktop user feed it
 # without joining the broad 'video' group.
+ACTION!="remove", SUBSYSTEM=="video4linux", ATTR{name}=="EMEET PIXY (PixyDeck)", TAG+="uaccess"
 ACTION!="remove", SUBSYSTEM=="video4linux", ATTR{name}=="PixyDeck Virtual Camera", TAG+="uaccess"

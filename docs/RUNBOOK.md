@@ -39,7 +39,7 @@ The installer is idempotent: it rebuilds the private virtualenv package, reinsta
 | Control path | `~/.local/share/pixydeck/venv/bin/pixydeck-cli status` | device, pan, tilt, zoom printed |
 | HID access | `ls -l /dev/hidraw*` while PIXY is plugged in | the PIXY node is accessible to your user |
 | Virtual camera service | `systemctl is-active pixydeck-virtual-camera.service` | `active` |
-| Virtual camera device | `v4l2-ctl --list-devices` | `PixyDeck Virtual Camera` listed |
+| Virtual camera device | `v4l2-ctl --list-devices` | `EMEET PIXY (PixyDeck)` listed |
 | AI features | Effects tab status | no "needs the optional AI extra" hint |
 
 ## Common issues
@@ -49,7 +49,7 @@ The installer is idempotent: it rebuilds the private virtualenv package, reinsta
 | "Device missing" for the virtual camera | `v4l2loopback` not available for the running kernel | install `v4l2loopback-dkms` + headers; after a kernel update, reboot; then `sudo systemctl restart pixydeck-virtual-camera.service` |
 | Service fails with `203/EXEC` | outdated unit from emeet-pixy-control with `/usr/bin/modprobe` | run `./install.sh` again |
 | HID controls "Permission denied" | udev rule not applied yet | replug the PIXY or log out/in; check `/etc/udev/rules.d/70-pixydeck.rules` |
-| Meeting app sees no camera | PixyDeck preview owns the stream | select *PixyDeck Virtual Camera*, or *Release camera* in PixyDeck |
+| Meeting app sees no camera | PixyDeck preview owns the stream | select *EMEET PIXY (PixyDeck)*, or *Release camera* in PixyDeck |
 | AI options greyed out | OpenCV/ONNX Runtime missing | `~/.local/share/pixydeck/venv/bin/pip install 'pixydeck[ai]'` from the source folder |
 | Low frame rate with AI background | AI matting is ~30 ms/frame on CPU | use 1080p instead of 4K, or the green-screen mode |
 | Camera tilts into its base | old saved positions below -52° | positions are clamped automatically since 0.3.0; re-store the preset |

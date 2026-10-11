@@ -66,7 +66,7 @@ Reads every on-board setting and round-trips motor speed, tracking target and lo
 
 - [ ] *EMEET PixyDeck* appears in the application menu and starts
 - [ ] Settings from an earlier emeet-pixy-control install were carried over
-- [ ] `systemctl status pixydeck-virtual-camera.service` is active and `v4l2-ctl --list-devices` lists *PixyDeck Virtual Camera*
+- [ ] `systemctl status pixydeck-virtual-camera.service` is active and `v4l2-ctl --list-devices` lists *EMEET PIXY (PixyDeck)*
 - [ ] Processed virtual camera works in Meet/Zoom/Teams/OBS, effects included
 - [ ] Direct virtual camera works; 1080p at 30 fps keeps hardware zoom
 - [ ] *Release camera*: the physical PIXY works in another app while PTZ still responds

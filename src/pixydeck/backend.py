@@ -109,11 +109,31 @@ def find_video_by_name(name: str, root: Path = VIDEO_SYSFS) -> str | None:
     return next((device for device, node_name in video_nodes(root) if node_name == name), None)
 
 
+def is_virtual_camera(name: str) -> bool:
+    """True for PixyDeck's own v4l2loopback device, under any of its names."""
+    from . import LEGACY_VIRTUAL_CAMERA_NAMES, VIRTUAL_CAMERA_NAME
+    upper = name.upper()
+    return (name in (VIRTUAL_CAMERA_NAME, *LEGACY_VIRTUAL_CAMERA_NAMES)
+            or "PIXYDECK" in upper or "VIRTUAL" in upper)
+
+
+def find_virtual_camera(root: Path = VIDEO_SYSFS) -> str | None:
+    """PixyDeck's virtual camera node, preferring the current name."""
+    from . import LEGACY_VIRTUAL_CAMERA_NAMES, VIRTUAL_CAMERA_NAME
+    for name in (VIRTUAL_CAMERA_NAME, *LEGACY_VIRTUAL_CAMERA_NAMES):
+        device = find_video_by_name(name, root)
+        if device is not None:
+            return device
+    return None
+
+
 def find_video_device(root: Path = VIDEO_SYSFS) -> str | None:
     """Return the physical PIXY video node that exposes PTZ controls."""
     for device, name in video_nodes(root):
+        if is_virtual_camera(name):
+            continue
         name = name.upper()
-        if "EMEET" not in name or "PIXY" not in name or "VIRTUAL" in name:
+        if "EMEET" not in name or "PIXY" not in name:
             continue
         # Only the capture node answers PTZ control ioctls; the metadata
         # node returns ENOTTY.

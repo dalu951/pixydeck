@@ -38,7 +38,7 @@ stabilization and a virtual camera for Meet, Zoom, Teams and OBS – in one nati
 | --- | --- |
 | 🎯 **PIXY on-board AI** | Face tracking, privacy mode, gestures, **click-to-focus** with the second lens, microphone noise cancelling – with live sync of changes made by gestures |
 | 🪄 **Background** | AI blur or replacement without a green screen; automatic green-screen keying when one is in view |
-| 🎥 **Virtual camera** | *PixyDeck Virtual Camera* carries zoom, framing and background effects into any video app |
+| 🎥 **Virtual camera** | *EMEET PIXY (PixyDeck)* carries zoom, framing and background effects into any video app |
 | 🫨 **Stabilization** | Removes shake from a wobbling monitor or desk |
 | 🔒 **Privacy timer** | Lens turns away after idle minutes and wakes up when Zoom, Teams, Meet or OBS opens the camera |
 | 🎛️ **Picture control** | Colour, sharpness, gamma, gain, white balance, exposure, focus, anti-flicker, presets |

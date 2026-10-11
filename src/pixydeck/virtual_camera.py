@@ -11,7 +11,7 @@ from PySide6.QtCore import QProcess, QTimer
 from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QWidget
 
 from . import VIRTUAL_CAMERA_NAME
-from .backend import find_video_by_name
+from .backend import find_virtual_camera
 from .constants import PREVIEW, RELEASED, VIRTUAL_DIRECT, VIRTUAL_PROCESSED
 from .vision import vision_available
 from .widgets import Card, Segmented, SettingRow, ToggleSwitch, set_state
@@ -21,7 +21,7 @@ FFMPEG = shutil.which("ffmpeg")
 
 
 def find_virtual_camera_device() -> str | None:
-    return find_video_by_name(VIRTUAL_CAMERA_NAME)
+    return find_virtual_camera()
 
 
 class VirtualCameraMixin:
@@ -59,7 +59,7 @@ class VirtualCameraMixin:
         self.virtual_autostart = ToggleSwitch()
         self.virtual_autostart.toggled.connect(lambda v: self.settings.setValue("virtual/autostart", v))
         self.virtual_autostart.setToolTip(
-            "Keeps “PixyDeck Virtual Camera” available, so Meet, WhatsApp or Teams can stay set to it. "
+            f"Keeps “{VIRTUAL_CAMERA_NAME}” available, so Meet, WhatsApp or Teams can stay set to it. "
             "While PixyDeck has no camera picture it shows a waiting screen.")
         virtual.body.addWidget(SettingRow("Start with PixyDeck", self.virtual_autostart,
                                           "Apps can stay set to the virtual camera"))
