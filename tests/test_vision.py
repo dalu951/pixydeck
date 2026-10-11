@@ -485,6 +485,75 @@ class OutputWatchTest(unittest.TestCase):
 
 
 
+class StabilizerQualityTest(unittest.TestCase):
+    """A synthetic room that shakes while a person moves in front of it.
+
+    The score is how much the background still moves between consecutive
+    stabilized frames. The person must not be mistaken for shake, and a
+    deliberate pan must not drag the picture to the edge of the margin.
+    """
+
+    W, H, FPS = 640, 360, 30
+
+    @classmethod
+    def setUpClass(cls):
+        rng = np.random.default_rng(7)
+        room = cv2.GaussianBlur((rng.random((cls.H + 120, cls.W + 400)) * 255).astype(np.uint8), (0, 0), 2)
+        room = cv2.cvtColor(room, cv2.COLOR_GRAY2BGR)
+        for _ in range(40):
+            x, y = (int(v) for v in rng.integers(0, (cls.W + 350, cls.H + 90)))
+            cv2.rectangle(room, (x, y), (x + int(rng.integers(10, 60)), y + int(rng.integers(6, 40))),
+                          tuple(int(c) for c in rng.integers(30, 230, 3)), -1)
+        cls.room = room
+
+    def frame(self, i, shake, person, pan=0.0):
+        t = i / self.FPS
+        sx = shake * math.sin(2 * math.pi * 3.1 * t) + 0.4 * shake * math.sin(2 * math.pi * 7.3 * t) + pan * i
+        sy = 0.8 * shake * math.sin(2 * math.pi * 2.3 * t + 1)
+        x0, y0 = 50 + int(round(sx)), 60 + int(round(sy))
+        image = self.room[y0:y0 + self.H, x0:x0 + self.W].copy()
+        if person:
+            px = self.W // 2 + int(60 * math.sin(2 * math.pi * 0.4 * t))
+            py = self.H // 2 + int(45 * math.sin(2 * math.pi * 0.25 * t))
+            cv2.ellipse(image, (px, py + 100), (115, 130), 0, 0, 360, (60, 90, 170), -1)
+            cv2.circle(image, (px, py - 40), 48, (120, 150, 200), -1)
+        return image
+
+    def residual(self, stabilize, shake, person):
+        stabilizer = Stabilizer()
+        previous, errors = None, []
+        for i in range(90):
+            image = self.frame(i, shake, person)
+            offset = stabilizer.update(image) if stabilize else (0.0, 0.0)
+            background = cv2.cvtColor(shift_image(image, offset)[20:100, 20:200], cv2.COLOR_BGR2GRAY)
+            background = background.astype(np.float32)
+            if previous is not None and i > 20:
+                (dx, dy), _ = cv2.phaseCorrelate(previous, background)
+                errors.append(dx * dx + dy * dy)
+            previous = background
+        return math.sqrt(sum(errors) / len(errors))
+
+    def test_shake_is_removed(self):
+        before = self.residual(False, 2.0, person=False)
+        after = self.residual(True, 2.0, person=False)
+        self.assertLess(after, 0.4)
+        self.assertLess(after, before / 3)
+
+    def test_moving_person_is_not_mistaken_for_shake(self):
+        before = self.residual(False, 2.0, person=True)
+        after = self.residual(True, 2.0, person=True)
+        self.assertLess(after, 0.4)
+        self.assertLess(after, before / 3)
+
+    def test_still_camera_stays_still_with_a_moving_person(self):
+        self.assertLess(self.residual(True, 0.0, person=True), 0.2)
+
+    def test_pan_passes_through_without_hitting_the_margin(self):
+        stabilizer = Stabilizer()
+        offsets = [stabilizer.update(self.frame(i, 1.0, person=False, pan=2.0)) for i in range(100)]
+        self.assertLess(max(abs(x) for x, _y in offsets), stabilizer.margin * 0.75)
+
+
 class DetectorSettingsTest(unittest.TestCase):
     def test_detector_keeps_moving_faces(self):
         from pixydeck import vision

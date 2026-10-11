@@ -159,22 +159,27 @@ class Smoother:
 class Stabilizer:
     """Cancels small, fast camera shake (e.g. a wobbling monitor).
 
-    The global shift between consecutive frames is measured with phase
-    correlation. Integrated, it gives the camera path; a low-pass copy of
-    that path is the intended motion (pans, slow drift). The difference is
-    the shake, which the renderer shifts back out. Large jumps and PTZ moves
-    reset the filter instead of being "stabilized".
+    Corners in the picture are tracked from frame to frame (Lucas-Kanade
+    optical flow) and a single camera shift is fitted with RANSAC, so a
+    person moving in front of the camera counts as outliers instead of being
+    mistaken for shake. Integrated, the shifts give the camera path; a
+    low-pass copy of it is the intended motion and the difference is the
+    shake, which the renderer shifts back out. The low-pass follows faster
+    the closer the correction gets to the margin, so deliberate pans and
+    tracking moves pass through instead of dragging the picture to the edge.
     """
 
-    SIZE = (320, 180)
-    # Measurement noise floor (pixels at SIZE) and minimum match confidence.
-    NOISE_PX = 0.35
-    MIN_RESPONSE = 0.12
+    SIZE = (480, 270)
+    MAX_CORNERS = 200
+    MIN_POINTS = 12
+    # RANSAC: a point agrees with the camera shift within this many pixels (at SIZE).
+    INLIER_PX = 1.0
+    # Share of tracked points that must agree, else the frame is not trusted.
+    MIN_INLIERS = 0.3
 
-    def __init__(self, margin: float = 0.04, smoothing: float = 0.12) -> None:
+    def __init__(self, margin: float = 0.04, smoothing: float = 0.05) -> None:
         self.margin = margin
         self.smoothing = smoothing
-        self._window = cv2.createHanningWindow(self.SIZE, cv2.CV_32F) if cv2 is not None else None
         self.paused_until = 0.0
         self.reset()
 
@@ -183,20 +188,32 @@ class Stabilizer:
         self._path = [0.0, 0.0]
         self._smooth = [0.0, 0.0]
 
+    def measure(self, previous, gray) -> tuple[float, float] | None:
+        """Camera shift between two grey frames in pixels, or None if unsure."""
+        points = cv2.goodFeaturesToTrack(previous, maxCorners=self.MAX_CORNERS, qualityLevel=0.01,
+                                         minDistance=12, blockSize=7)
+        if points is None or len(points) < self.MIN_POINTS:
+            return None  # a plain wall: nothing to lock on to
+        moved, status, _err = cv2.calcOpticalFlowPyrLK(previous, gray, points, None,
+                                                       winSize=(21, 21), maxLevel=3)
+        found = status.reshape(-1) == 1
+        if found.sum() < self.MIN_POINTS:
+            return None
+        start, end = points[found], moved[found]
+        matrix, inliers = cv2.estimateAffinePartial2D(
+            start, end, method=cv2.RANSAC, ransacReprojThreshold=self.INLIER_PX, maxIters=200, confidence=0.99)
+        if matrix is None or inliers is None or inliers.sum() < max(self.MIN_POINTS, self.MIN_INLIERS * len(start)):
+            return None
+        return float(matrix[0, 2]), float(matrix[1, 2])
+
     def update(self, image) -> tuple[float, float]:
         """Feed the next frame (BGR, any size); return the normalized shake offset."""
         gray = cv2.cvtColor(cv2.resize(image, self.SIZE, interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY)
-        gray = gray.astype(np.float32)
         previous, self._previous = self._previous, gray
         if previous is None:
             return 0.0, 0.0
-        (dx, dy), response = cv2.phaseCorrelate(previous, gray, self._window)
-        if response < self.MIN_RESPONSE:
-            # Weak, ambiguous match (e.g. repetitive textures): don't trust it.
-            dx = dy = 0.0
-        # Sub-pixel noise would otherwise be "corrected" into visible jitter.
-        dx = 0.0 if abs(dx) < self.NOISE_PX else dx
-        dy = 0.0 if abs(dy) < self.NOISE_PX else dy
+        shift = self.measure(previous, gray)
+        dx, dy = shift if shift is not None else (0.0, 0.0)
         dx, dy = dx / self.SIZE[0], dy / self.SIZE[1]
         self._path[0] += dx
         self._path[1] += dy
@@ -204,9 +221,13 @@ class Stabilizer:
             # Deliberate movement or a cut: follow it instead of fighting it.
             self._smooth = list(self._path)
             return 0.0, 0.0
+        offset = []
         for axis in (0, 1):
-            self._smooth[axis] += (self._path[axis] - self._smooth[axis]) * self.smoothing
-        return tuple(max(-self.margin, min(self.margin, p - s)) for p, s in zip(self._path, self._smooth))
+            lag = abs(self._path[axis] - self._smooth[axis]) / self.margin
+            alpha = min(1.0, self.smoothing + 0.6 * lag * lag)
+            self._smooth[axis] += (self._path[axis] - self._smooth[axis]) * alpha
+            offset.append(max(-self.margin, min(self.margin, self._path[axis] - self._smooth[axis])))
+        return offset[0], offset[1]
 
 
 def shift_image(image, offset: tuple[float, float]):
