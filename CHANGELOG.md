@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Find me when I sit down** (Tracking tab, on by default): the PIXY's own tracking tilts too slowly to follow you when you sit down and then stops looking. PixyDeck learns your seated tilt and tilts back there when your face has been gone for over a second; the camera's tracking takes over again
+- Pan/tilt shown in PixyDeck come from the motor controller – the V4L2 controls only echo the last command and missed the camera's own tracking moves
 - **Steadier stabilization**: shake is measured by tracking corners with optical flow and fitting one camera shift with RANSAC, so a person moving in front of the camera no longer counts as shake (it used to make the picture busier); it also catches sub-2-pixel monitor wobble, and deliberate pans and tracking moves pass through without dragging the picture to the edge. On a synthetic test scene the remaining background wobble dropped from 0.8–3.7 px to under 0.2 px
 - **No camera choice needed**: the virtual camera is created at boot before the real camera is announced, so it becomes `/dev/video0` – apps that take the first camera (WhatsApp, browsers) get PixyDeck automatically. *Start with PixyDeck* is now on by default
 - Auto-framing keeps up when you sit down or stand up: it widens after 0.8 s without a face (was 2.5 s), the face detector tolerates motion blur better, and while the camera's own tracking follows you the digital crop stays centred (the camera owns the position, no more up/down lag from two controllers) and zooms at most 1.6×

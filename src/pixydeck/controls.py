@@ -47,6 +47,11 @@ class ControlsMixin:
         self.target.selected.connect(self.set_target)
         self.target.setToolTip("What tracking keeps in frame – Upper body copes better when you walk")
         onboard.body.addWidget(SettingRow("Keep in frame", self.target))
+        self.find_me = ToggleSwitch()
+        self.find_me.toggled.connect(self.set_find_me)
+        self.find_me_row = SettingRow("Find me when I sit down", self.find_me,
+                                      "Tilts back to your seat when tracking loses you")
+        onboard.body.addWidget(self.find_me_row)
         self.gesture = ToggleSwitch()
         self.gesture.toggled.connect(self.set_gesture)
         onboard.body.addWidget(SettingRow("Gesture control", self.gesture))
@@ -210,6 +215,8 @@ class ControlsMixin:
 
     def show_tracking_state(self) -> None:
         mode = self.tracking_mode
+        if hasattr(self, "processor"):
+            self.update_autoframe_availability()  # Find me needs face detection while tracking
         self.tracking.set_current(mode)
         self.pill_tracking.setText({"idle": "Tracking off", "track": "Face tracking", "privacy": "Privacy"}[mode])
         set_state(self.pill_tracking, {"idle": "", "track": "on", "privacy": "warn"}[mode])
@@ -232,6 +239,10 @@ class ControlsMixin:
             self.mic_muted_by_us = False
             self.worker.submit(set_pixy_microphone_muted, False)
         self.idle_seconds = 0
+
+    def set_find_me(self, enabled: bool) -> None:
+        self.settings.setValue("tracking/find_me", enabled)
+        self.update_autoframe_availability()
 
     def set_gesture(self, enabled: bool) -> None:
         self.settings.setValue("camera/gesture", enabled)

@@ -42,6 +42,12 @@ FACE_LOST_AFTER = 0.8
 # While the camera's own tracking follows you, the digital crop only adds a
 # little zoom, so a quick move (sitting down) stays inside the picture.
 TRACKING_MAX_ZOOM = 1.6
+# "Find me": the camera's tracking loses you when your face drops out of the
+# picture faster than it tilts (sitting down). After this long without a face
+# PixyDeck tilts back to your usual seated position.
+FIND_ME_AFTER = 1.2
+FIND_ME_MIN_GAP = 5      # degrees above the seat before it is worth moving
+FIND_ME_COOLDOWN = 4.0   # seconds between two attempts
 
 # Who owns the camera stream: the preview, another app, or the virtual camera.
 PREVIEW, RELEASED, VIRTUAL_DIRECT, VIRTUAL_PROCESSED = "preview", "released", "direct", "processed"

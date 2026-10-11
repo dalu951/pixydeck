@@ -219,6 +219,9 @@ class ControllerTest(V4L2TestCase):
         patch = mock.patch.object(backend, "find_video_device", return_value=self.device)
         self.find = patch.start()
         self.addCleanup(patch.stop)
+        hid = mock.patch.object(backend, "find_hidraw_device", return_value=None)  # never the real camera
+        hid.start()
+        self.addCleanup(hid.stop)
         self.controller = backend.PixyController()
         self.addCleanup(self.controller.close)
 
@@ -253,6 +256,19 @@ class ControllerTest(V4L2TestCase):
         with mock.patch.object(backend, "find_hidraw_device", return_value=None):
             with self.assertRaisesRegex(backend.PixyError, "HID device not found"):
                 self.controller.hid_device()
+
+    def test_position_prefers_the_motor_reading(self):
+        self.controller.move_to(10, 5)
+        with mock.patch.object(backend, "find_hidraw_device", return_value="/dev/hidrawX"), \
+                mock.patch.object(backend, "get_motor_position",
+                                  side_effect=lambda _dev, axis: {"pan": (10.0, 33.4), "tilt": (5.0, 18.6)}[axis]):
+            self.assertEqual(self.controller.position(), (33, 19, backend.ZOOM_MIN))
+
+    def test_position_falls_back_to_v4l2_when_the_motor_is_silent(self):
+        self.controller.move_to(10, 5)
+        with mock.patch.object(backend, "find_hidraw_device", return_value="/dev/hidrawX"), \
+                mock.patch.object(backend, "get_motor_position", return_value=None):
+            self.assertEqual(self.controller.position(), (10, 5, backend.ZOOM_MIN))
 
     def test_flicker_and_query(self):
         self.controller.flicker("60")

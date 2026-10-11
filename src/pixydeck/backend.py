@@ -701,12 +701,22 @@ class PixyController:
             return query_control(device, control, fd)
 
     def position(self) -> tuple[int, int, int]:
-        """Return (pan degrees, tilt degrees, zoom)."""
-        return (
-            round(self.get("pan_absolute") / DEGREE_UNIT),
-            round(self.get("tilt_absolute") / DEGREE_UNIT),
-            self.get("zoom_absolute"),
-        )
+        """Return (pan degrees, tilt degrees, zoom).
+
+        Pan and tilt come from the motor controller when it answers: the V4L2
+        controls only echo the last command and miss the camera's own
+        tracking moves.
+        """
+        angles = []
+        for axis, control in (("pan", "pan_absolute"), ("tilt", "tilt_absolute")):
+            actual = None
+            try:
+                reading = get_motor_position(self.hid_device(), axis)
+                actual = reading[1] if reading is not None else None
+            except PixyError:
+                pass
+            angles.append(round(actual) if actual is not None else round(self.get(control) / DEGREE_UNIT))
+        return angles[0], angles[1], self.get("zoom_absolute")
 
     def move_to(self, pan_deg: int | None = None, tilt_deg: int | None = None) -> None:
         if pan_deg is not None:

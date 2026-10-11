@@ -522,5 +522,101 @@ class CameraCommandsTest(GuiTestCase):
         self.assertEqual(self.window.speed_sliders["pan"].value(), gui.backend.MOTOR_SPEED_MAX)
 
 
+
+class FindMeTest(GuiTestCase):
+    """Tilting back to the seat when the camera's tracking loses you."""
+
+    def setUp(self):
+        super().setUp()
+        w = self.window
+        w.find_me.setChecked(True)
+        w.tracking_mode = "track"
+        w.last_face_seen_at = time.monotonic()
+
+    def test_seat_is_the_lowest_tilt_where_you_are_seen(self):
+        w = self.window
+        w.on_position((30, 20, 100))
+        self.assertEqual(w.seat_tilt, 20)
+        w.on_position((30, -10, 100))
+        self.assertEqual(w.seat_tilt, -10)
+        w.on_position((30, 18, 100))  # standing up for a moment
+        self.assertTrue(-10 < w.seat_tilt < -9)
+
+    def test_no_learning_without_a_face_or_tracking(self):
+        w = self.window
+        w.last_face_seen_at = 0
+        w.on_position((30, -10, 100))
+        self.assertIsNone(w.seat_tilt)
+        w.last_face_seen_at = time.monotonic()
+        w.tracking_mode = "idle"
+        w.on_position((30, -10, 100))
+        self.assertIsNone(w.seat_tilt)
+
+    def lose_face(self, tilt=18, seat=-10.0):
+        w = self.window
+        w.seat_tilt = seat
+        w.position = (30, tilt)
+        w.last_face_seen_at = time.monotonic() - 2
+        w.on_faces([])
+
+    def test_lost_face_tilts_back_to_the_seat(self):
+        self.lose_face()
+        self.assertTrue(self.settle(lambda: self.called("move_to")))
+        self.assertEqual(self.called("move_to")[-1], ("move_to", None, -10))
+        self.assertIn("tilting back to your seat", self.window.statusBar().currentMessage())
+
+    def test_one_attempt_per_cooldown(self):
+        self.lose_face()
+        self.lose_face()
+        self.settle(lambda: False, timeout=0.3)
+        self.assertEqual(len(self.called("move_to")), 1)
+
+    def test_no_move_when_already_at_the_seat(self):
+        self.lose_face(tilt=-8)
+        self.settle(lambda: False, timeout=0.3)
+        self.assertFalse(self.called("move_to"))
+
+    def test_brief_dropout_is_ignored(self):
+        w = self.window
+        w.seat_tilt, w.position = -10.0, (30, 18)
+        w.last_face_seen_at = time.monotonic() - 0.4
+        w.on_faces([])
+        self.settle(lambda: False, timeout=0.3)
+        self.assertFalse(self.called("move_to"))
+
+    def test_off_without_tracking_or_switch(self):
+        self.window.find_me.setChecked(False)
+        self.lose_face()
+        self.window.find_me.setChecked(True)
+        self.window.tracking_mode = "idle"
+        self.lose_face()
+        self.settle(lambda: False, timeout=0.3)
+        self.assertFalse(self.called("move_to"))
+
+    def test_tracking_turns_face_detection_on(self):
+        w = self.window
+        w.show_faces.set_silently(False)
+        w.autoframe.set_silently(False)
+        w.set_tracking_mode("track")
+        self.assertTrue(w.processor._detect or not gui.vision_available())
+        w.find_me.setChecked(False)
+        self.assertFalse(w.processor._detect)
+
+    def test_startup_position_is_the_first_guess(self):
+        w = self.window
+        w.seat_tilt = None
+        w.settings.setValue("camera/tilt", -12)
+        w.restore_camera_state()
+        self.assertEqual(w.seat_tilt, -12)
+
+    def test_seat_is_remembered(self):
+        self.window.seat_tilt = -7.4
+        self.close_window()
+        self.window = gui.PixyGUI()
+        self.controller = self.window.controller
+        self.assertEqual(self.window.seat_tilt, -7.4)
+        self.assertTrue(self.window.find_me.isChecked())
+
+
 if __name__ == "__main__":
     unittest.main()

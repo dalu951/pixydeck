@@ -38,6 +38,9 @@ from .constants import (
     FOV_H,
     FOV_V,
     FACE_LOST_AFTER,
+    FIND_ME_AFTER,
+    FIND_ME_COOLDOWN,
+    FIND_ME_MIN_GAP,
     FRAMING,
     HW_ZOOM_MAX,
     PAN_LIMIT,
@@ -162,6 +165,9 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         self.manual_center = (0.5, 0.5)
         self.smoother = Smoother()
         self.last_faces_at = 0.0
+        self.last_face_seen_at = 0.0  # any face, also without auto-framing
+        self.seat_tilt: float | None = None
+        self.find_me_at = 0.0
         self.last_tick = time.monotonic()
         self.output_fps = 0.0
 
@@ -498,6 +504,12 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         self.privacy_mic.set_silently(self.bool_setting("privacy/mute_mic") and bool(PACTL))
         # On by default: apps find "EMEET PIXY (PixyDeck)" without anyone pressing Start.
         self.virtual_autostart.set_silently(self.bool_setting("virtual/autostart", True))
+        self.find_me.set_silently(self.bool_setting("tracking/find_me", True))
+        seat = self.settings.value("tracking/seat_tilt")
+        try:
+            self.seat_tilt = float(seat) if seat is not None else None
+        except (TypeError, ValueError):
+            self.seat_tilt = None
         self.calls_enabled.set_silently(self.bool_setting("calls/enabled"))
         start = str(self.settings.value("calls/start", "track"))
         self.calls_start.set_current(start if start in ("track", "keep") else "track")
@@ -576,11 +588,15 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
 
         self.position = (pan, tilt)
         self.pad.set_position(pan, tilt)
+        if self.seat_tilt is None:
+            self.seat_tilt = float(tilt)  # until Find me has learned where you sit
         self.worker.submit(restore, done=lambda _: self.notify("Saved camera settings restored"))
         self.apply_zoom()
         self.load_image_controls()
 
     def save_position(self) -> None:
+        if self.seat_tilt is not None:
+            self.settings.setValue("tracking/seat_tilt", round(self.seat_tilt, 1))
         pan, tilt = self.position
         self.settings.setValue("camera/pan", pan)
         self.settings.setValue("camera/tilt", tilt)
@@ -825,6 +841,10 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
 
     def on_faces(self, faces: list) -> None:
         self.view.set_faces(faces)
+        if faces:
+            self.last_face_seen_at = time.monotonic()
+        else:
+            self.check_find_me()
         if not self.autoframe.isChecked():
             return
         if faces:
@@ -1014,6 +1034,39 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         pan, tilt, _zoom = position
         self.position = (pan, tilt)
         self.pad.set_position(pan, tilt)
+        self.learn_seat(tilt)
+
+    # ------------------------------------------------------------------
+    # Find me: tilt back to the seat when tracking has lost you
+    # ------------------------------------------------------------------
+
+    def find_me_active(self) -> bool:
+        return self.find_me.isChecked() and self.tracking_mode == "track"
+
+    def learn_seat(self, tilt: int) -> None:
+        """Your seat is the lowest tilt at which the camera keeps seeing you.
+
+        Standing raises the tilt for a while; the estimate drifts up only
+        slowly, so a few minutes on your feet do not move the seat.
+        """
+        if not self.find_me_active() or time.monotonic() - self.last_face_seen_at > 0.5:
+            return
+        if self.seat_tilt is None or tilt < self.seat_tilt:
+            self.seat_tilt = float(tilt)
+        else:
+            self.seat_tilt += (tilt - self.seat_tilt) * 0.02
+
+    def check_find_me(self) -> None:
+        now = time.monotonic()
+        if not self.find_me_active() or self.seat_tilt is None:
+            return
+        if now - self.last_face_seen_at < FIND_ME_AFTER or now - self.find_me_at < FIND_ME_COOLDOWN:
+            return
+        if self.position[1] - self.seat_tilt < FIND_ME_MIN_GAP:
+            return  # already at the seat: you really left
+        self.find_me_at = now
+        self.worker.submit(self.controller.move_to, None, round(self.seat_tilt), key="find-me")
+        self.notify("Lost you – tilting back to your seat", 4000)
 
     def center_camera(self) -> None:
         self.manual_center = (0.5, 0.5)
@@ -1045,7 +1098,7 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
             self.view.set_faces([])
 
     def update_autoframe_availability(self) -> None:
-        wants = self.autoframe.isChecked() or self.show_faces.isChecked()
+        wants = self.autoframe.isChecked() or self.show_faces.isChecked() or self.find_me_active()
         self.processor.set_detection(self.digital_zoom_allowed() and wants)
 
 

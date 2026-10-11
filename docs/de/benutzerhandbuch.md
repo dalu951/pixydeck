@@ -22,7 +22,7 @@ Selten gebrauchte Einstellungen liegen in eingeklappten Karten (▸); ein Klick 
 
 <img src="../media/ai.png" width="860" alt="Tab Tracking">
 
-- **Camera tracking:** *Off*, *Face tracking* (die Kamera folgt dir mechanisch) oder *Privacy* (die Linse dreht weg). *Keep in frame* bestimmt, worauf das Tracking achtet: *Auto*, *Face* (Gesicht) oder *Upper body* (Oberkörper) – der Oberkörper klappt beim Gehen besser. Änderungen per Handgeste erscheinen nach etwa drei Sekunden auch in der App.
+- **Camera tracking:** *Off*, *Face tracking* (die Kamera folgt dir mechanisch) oder *Privacy* (die Linse dreht weg). *Keep in frame* bestimmt, worauf das Tracking achtet: *Auto*, *Face* (Gesicht) oder *Upper body* (Oberkörper) – der Oberkörper klappt beim Gehen besser. **Find me when I sit down** hilft dem Tracking der Kamera, das beim Hinsetzen zu langsam nach unten neigt: PixyDeck lernt, wo du normalerweise sitzt, und neigt dorthin zurück, wenn es dein Gesicht verliert. Dafür braucht PixyDeck das Bild selbst (Vorschau oder virtuelle Kamera). Änderungen per Handgeste erscheinen nach etwa drei Sekunden auch in der App.
 - **Focus:** *Center*, *Face* oder *Click point* – dann irgendetwas im Vorschaubild anklicken, z. B. einen Gegenstand, den du in die Kamera hältst; die zweite Linse der PIXY stellt darauf scharf (gelbe Markierung).
 - **Auto-Framing (Software):** zoomt digital und folgt Gesichtern. *Wide*, *Medium*, *Tight* bestimmen, wie nah; *Show detected faces* zeigt die erkannten Gesichter.
 

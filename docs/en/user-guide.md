@@ -22,7 +22,7 @@ Rarely used settings sit in folded cards (▸); click the title to open them. Pi
 
 <img src="../media/ai.png" width="860" alt="Tracking tab">
 
-- **Camera tracking:** *Off*, *Face tracking* (the camera follows you physically) or *Privacy* (the lens turns away). *Keep in frame* chooses what tracking follows: *Auto*, *Face* or *Upper body* – the upper body copes better when you walk. Changes made by hand gestures appear in the app within about three seconds.
+- **Camera tracking:** *Off*, *Face tracking* (the camera follows you physically) or *Privacy* (the lens turns away). *Keep in frame* chooses what tracking follows: *Auto*, *Face* or *Upper body* – the upper body copes better when you walk. **Find me when I sit down** helps the camera's tracking, which tilts too slowly to follow you when you sit: PixyDeck learns where you usually sit and tilts back there when it loses your face. It needs PixyDeck's own picture (preview or virtual camera). Changes made by hand gestures appear in the app within about three seconds.
 - **Focus:** *Center*, *Face*, or *Click point* – then click anything in the preview, e.g. an object you hold up, and the PIXY's second lens focuses on it (yellow marker).
 - **Auto-framing (software):** digitally zooms and follows faces. *Wide*, *Medium*, *Tight* set how close; *Show detected faces* draws the detection boxes.
 
