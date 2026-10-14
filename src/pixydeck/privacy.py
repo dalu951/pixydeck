@@ -175,6 +175,10 @@ class PrivacyMixin:
             self.set_tracking_mode(self.mode_before_privacy if self.mode_before_privacy != "privacy" else "idle")
         if self.calls_mic.isChecked():
             self.worker.submit(self.switch_to_pixy_microphone, key="call-mic")
+        if self.calls_focus_lock.isChecked() and not self.lock_toggles["focus"].isChecked():
+            self.focus_locked_by_call = True
+            self.lock_toggles["focus"].set_silently(True)
+            self.worker.submit(self.controller.lock, "focus", True, key="lock/focus")
         self.notify(f"Call started – {apps}", 6000)
         if self.effects_active():
             self.worker.submit(camera_users, physical_pixy_nodes(), self.own_pids(),
@@ -198,6 +202,10 @@ class PrivacyMixin:
         if self.microphone_before_call is not None:
             previous, self.microphone_before_call = self.microphone_before_call, None
             self.worker.submit(set_default_microphone, previous, key="call-mic")
+        if self.focus_locked_by_call:
+            self.focus_locked_by_call = False
+            self.lock_toggles["focus"].set_silently(False)
+            self.worker.submit(self.controller.lock, "focus", False, key="lock/focus")
         self.notify("Call ended" + (" – privacy mode" if self.calls_privacy.isChecked() else ""), 6000)
 
     def switch_to_pixy_microphone(self) -> None:

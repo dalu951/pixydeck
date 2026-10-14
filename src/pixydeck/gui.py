@@ -182,8 +182,10 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         self.call_detector = CallDetector()
         self.microphone_before_call: str | None = None
         self.mic_muted_by_us = False
+        self.focus_locked_by_call = False
         self.idle_seconds = 0
         self.focus_point = (0.5, 0.5)
+        self.focus_changed_at = 0.0
         self.tracking_changed_at = 0.0
 
         self.setWindowTitle(APP_NAME)
@@ -481,13 +483,29 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
 
     def load_ui_state(self) -> None:
         self.zoom_value = max(ZOOM_MIN, min(ZOOM_MAX, self.int_setting("camera/zoom", ZOOM_MIN)))
+        previous = str(self.settings.value("camera/mode_before_privacy", "idle"))
+        self.mode_before_privacy = previous if previous in ("idle", "track") else "idle"
         tracking = str(self.settings.value("camera/tracking", "idle"))
         self.tracking_mode = tracking if tracking in backend.TRACKING_MODES else "idle"
+        # Opening the control window is activity. Resume the mode from before
+        # privacy instead of waking the camera only to turn it away again.
+        if self.tracking_mode == "privacy":
+            self.tracking_mode = self.mode_before_privacy
+            self.settings.setValue("camera/tracking", self.tracking_mode)
         self.show_tracking_state()
         self.gesture.set_silently(self.bool_setting("camera/gesture"))
         self.audio.set_current(str(self.settings.value("camera/audio", "nc")))
         target = str(self.settings.value("camera/target", "auto"))
         self.target.set_current(target if target in backend.TARGET_TRACK_MODES else "auto")
+        focus = str(self.settings.value("camera/focus", "center"))
+        self.focus_mode.set_current(focus if focus in backend.FOCUS_MODES else "center")
+        try:
+            self.focus_point = (
+                max(0.0, min(1.0, float(self.settings.value("camera/focus_x", 0.5)))),
+                max(0.0, min(1.0, float(self.settings.value("camera/focus_y", 0.5)))),
+            )
+        except (TypeError, ValueError):
+            self.focus_point = (0.5, 0.5)
         pan_speed = self.int_setting("camera/motor_speed", backend.MOTOR_SPEED_DEFAULT)
         for axis, key, default in (("pan", "camera/motor_speed", backend.MOTOR_SPEED_DEFAULT),
                                    ("tilt", "camera/tilt_speed", pan_speed)):
@@ -514,6 +532,7 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         start = str(self.settings.value("calls/start", "track"))
         self.calls_start.set_current(start if start in ("track", "keep") else "track")
         self.calls_mic.set_silently(self.bool_setting("calls/microphone") and bool(PACTL))
+        self.calls_focus_lock.set_silently(self.bool_setting("calls/focus_lock"))
         self.calls_privacy.set_silently(self.bool_setting("calls/privacy", True))
         self.show_call_state()
         default_mode = VIRTUAL_PROCESSED if vision_available() else VIRTUAL_DIRECT
@@ -562,6 +581,8 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         gesture = self.gesture.isChecked()
         audio = self.audio.current() or "nc"
         target = self.target.current() or "auto"
+        focus = self.focus_mode.current() or "center"
+        focus_point = self.focus_point
         speeds = {axis: row.value() for axis, row in self.speed_sliders.items()}
         flicker = self.flicker.current() or "60"
         image = {}
@@ -582,6 +603,7 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
             c.gesture(gesture)
             c.audio(audio)
             c.target_track(target)
+            c.focus_mode(focus, *focus_point)
             for axis, speed in speeds.items():
                 c.motor_speed(axis, speed)
             return True

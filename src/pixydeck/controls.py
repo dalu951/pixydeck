@@ -105,6 +105,11 @@ class ControlsMixin:
         self.calls_mic.setToolTip("Makes the PIXY the default input during a call and switches back afterwards"
                                   if PACTL else "pactl not found")
         calls.body.addWidget(SettingRow("Use the PIXY microphone", self.calls_mic))
+        self.calls_focus_lock = ToggleSwitch()
+        self.calls_focus_lock.toggled.connect(self.calls_focus_lock_toggled)
+        calls.body.addWidget(SettingRow(
+            "Keep focus steady during calls", self.calls_focus_lock,
+            "Locks the current focus when a call starts to prevent focus hunting"))
         self.calls_status = QLabel("", objectName="subtle")
         self.calls_status.setWordWrap(True)
         calls.body.addWidget(self.calls_status)
@@ -132,7 +137,7 @@ class ControlsMixin:
         self.audio.selected.connect(self.set_audio)
         microphone.body.addWidget(self.audio)
         self.privacy_mic = ToggleSwitch()
-        self.privacy_mic.toggled.connect(lambda v: self.settings.setValue("privacy/mute_mic", v))
+        self.privacy_mic.toggled.connect(self.privacy_mic_toggled)
         self.privacy_mic.setEnabled(bool(PACTL))
         self.privacy_mic.setToolTip("Via PipeWire/PulseAudio" if PACTL else "pactl not found")
         microphone.body.addWidget(SettingRow("Mute in privacy mode", self.privacy_mic))
@@ -224,6 +229,7 @@ class ControlsMixin:
     def set_tracking_mode(self, mode: str, by_timer: bool = False) -> None:
         if mode == "privacy" and self.tracking_mode != "privacy":
             self.mode_before_privacy = self.tracking_mode
+            self.settings.setValue("camera/mode_before_privacy", self.mode_before_privacy)
         self.privacy_by_timer = by_timer and mode == "privacy"
         self.privacy_by_call = False
         self.tracking_changed_at = time.monotonic()
@@ -239,6 +245,17 @@ class ControlsMixin:
             self.mic_muted_by_us = False
             self.worker.submit(set_pixy_microphone_muted, False)
         self.idle_seconds = 0
+
+    def privacy_mic_toggled(self, enabled: bool) -> None:
+        """Apply a changed mute preference immediately while already private."""
+        self.settings.setValue("privacy/mute_mic", enabled)
+        if self.tracking_mode != "privacy" or enabled == self.mic_muted_by_us:
+            return
+        self.mic_muted_by_us = enabled
+        self.worker.submit(set_pixy_microphone_muted, enabled, key="privacy-mic")
+
+    def calls_focus_lock_toggled(self, enabled: bool) -> None:
+        self.settings.setValue("calls/focus_lock", enabled)
 
     def set_find_me(self, enabled: bool) -> None:
         self.settings.setValue("tracking/find_me", enabled)
@@ -264,6 +281,8 @@ class ControlsMixin:
         self.worker.submit(self.controller.motor_speed, axis, speed, key=f"speed/{axis}")
 
     def set_lock(self, name: str, locked: bool) -> None:
+        if name == "focus" and not locked:
+            self.focus_locked_by_call = False
         self.worker.submit(self.controller.lock, name, locked, key=f"lock/{name}")
 
     def save_power_on_position(self) -> None:
@@ -284,6 +303,8 @@ class ControlsMixin:
         self.worker.submit(self.controller.flicker, mode, key="flicker")
 
     def set_focus_mode(self, mode: str) -> None:
+        self.settings.setValue("camera/focus", mode)
+        self.focus_changed_at = time.monotonic()
         if mode == "area":
             self.notify("Click in the preview to choose the focus point")
             x, y = self.focus_point
@@ -297,6 +318,8 @@ class ControlsMixin:
             return
         # nx/ny are already full-frame coordinates, also when digitally zoomed.
         self.focus_point = (nx, ny)
+        self.settings.setValue("camera/focus_x", nx)
+        self.settings.setValue("camera/focus_y", ny)
         self.view.show_focus_point(nx, ny)
         self.worker.submit(self.controller.focus_mode, "area", nx, ny, key="focus")
 
@@ -327,8 +350,10 @@ class ControlsMixin:
         if "gesture" in state and state["gesture"] != self.gesture.isChecked():
             self.gesture.set_silently(state["gesture"])
             self.settings.setValue("camera/gesture", state["gesture"])
-        if "focus" in state and state["focus"] != self.focus_mode.current():
+        if ("focus" in state and time.monotonic() - self.focus_changed_at >= 1.5
+                and state["focus"] != self.focus_mode.current()):
             self.focus_mode.set_current(state["focus"])
+            self.settings.setValue("camera/focus", state["focus"])
         for name, toggle in self.feature_toggles.items():
             if name in state and state[name] != toggle.isChecked():
                 toggle.set_silently(state[name])

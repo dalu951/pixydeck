@@ -14,6 +14,7 @@ Erste Anlaufstelle ist **⚙ Setup** in PixyDeck: Der Dialog prüft Berechtigung
 | **Zoom-Regler ausgegraut** | Die Kamera ist an eine andere App freigegeben und deren Videomodus ignoriert den Hardware-Zoom (über 1080p oder 1080p mit 60 fps). Für Digitalzoom die verarbeitete virtuelle Kamera nutzen. |
 | **KI-Optionen ausgegraut** | OpenCV/ONNX Runtime fehlen. Die Pakete installieren sie mit; bei `install.sh` im Quellordner `~/.local/share/pixydeck/venv/bin/pip install 'pixydeck[ai]'` ausführen. |
 | **Niedrige Bildrate mit KI-Hintergrund** | Die KI-Freistellung braucht etwa 30 ms pro Bild auf der CPU. 1080p statt 4K nutzen oder einen Green Screen. |
+| **`--gpu` nutzt trotzdem die CPU** | Erst `nvidia-smi`, dann `~/.local/share/pixydeck/venv/bin/pixydeck-gpu-benchmark` ausführen. Das Protokoll nennt die CUDA-GPU oder den Grund für den Rückfall. `PIXYDECK_DISABLE_CUDA=1` erzwingt den CPU-Pfad. |
 | **Kamera kippt in ihren Sockel** | Positionen unter −52° sind seit 0.3.0 gesperrt; die Position neu speichern. |
 | **Warnung zu `libvdpau_nvidia.so`** | Qt sucht nach optionalen Hardware-Decodern; harmlos, wenn die Vorschau läuft. |
 

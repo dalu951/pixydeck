@@ -337,6 +337,30 @@ class ProcessorStateTest(unittest.TestCase):
         self.assertIsNone(p.key)
         self.assertIsNone(p.output_pid)
         self.assertIsNone(p.take_preview())
+        self.assertEqual(p.acceleration, "CPU")
+
+    def test_cuda_renderer_is_used_and_named(self):
+        renderer = mock.Mock(device_name="Test GPU")
+        renderer.render.return_value = (b"gpu", None)
+        self.processor._cuda = renderer
+        result = self.processor._render_frame(
+            encode(split_frame()), Crop(), (64, 36), 0, None, True, None, (0.0, 0.0), False)
+        self.assertEqual(result, (b"gpu", None))
+        self.assertEqual(self.processor.acceleration, "CUDA (Test GPU)")
+        renderer.render.assert_called_once()
+
+    def test_cuda_failure_falls_back_once_to_cpu(self):
+        renderer = mock.Mock(device_name="Test GPU")
+        renderer.render.side_effect = RuntimeError("GPU lost")
+        self.processor._cuda = renderer
+        with self.assertLogs("pixydeck.vision", level="WARNING") as messages:
+            data, preview = self.processor._render_frame(
+                encode(split_frame()), Crop(), (64, 36), 0, None, True, None, (0.0, 0.0), False)
+        self.assertIn("CUDA render failed", messages.output[0])
+        self.assertEqual(len(data), 64 * 36 * 3 // 2)
+        self.assertIsNone(preview)
+        self.assertIsNone(self.processor._cuda)
+        self.assertEqual(self.processor.acceleration, "CPU")
 
     def test_each_feature_requests_frames(self):
         p = self.processor

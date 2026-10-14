@@ -46,7 +46,7 @@ Fill with **blur**, a **gradient**, a **colour** or your own **image**. Effects 
 
 ## Calls tab
 
-- **Calls:** with *Detect calls* on, PixyDeck notices when Meet, Zoom, Teams, WhatsApp, OBS … open the PIXY or the virtual camera (the header then shows *📞 Call*). At the start it turns face tracking on (or only leaves privacy with *Keep mode*) and can make the PIXY microphone the default input; a few seconds after the last app lets go, the lens turns away (*Privacy when the call ends*) and the previous microphone is restored. A quick device check by a browser does not count as a call. If the app reads the PIXY directly while effects are on, PixyDeck points you to the virtual camera.
+- **Calls:** with *Detect calls* on, PixyDeck notices when Meet, Zoom, Teams, WhatsApp, OBS … open the PIXY or the virtual camera (the header then shows *📞 Call*). At the start it turns face tracking on (or only leaves privacy with *Keep mode*), can make the PIXY microphone the default input and can lock the current focus to prevent hunting; a few seconds after the last app lets go, the lens turns away (*Privacy when the call ends*), the previous microphone is restored and only a focus lock set by the call is released. A quick device check by a browser does not count as a call. If the app reads the PIXY directly while effects are on, PixyDeck points you to the virtual camera.
 - **Privacy timer:** enters privacy mode after the idle time and wakes up as soon as another app opens the camera. It pauses while the preview is visible.
 - **Microphone:** the PIXY's DSP mode (noise cancel, live, original) and muting it in privacy mode.
 

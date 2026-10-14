@@ -32,6 +32,15 @@ PIXYDECK_HARDWARE=1 PYTHONPATH=src .venv/bin/python -m unittest tests.test_hardw
 
 Reads every on-board setting and round-trips motor speed, tracking target and locks, restoring each value. It never moves the camera or changes the power-on position.
 
+### On an NVIDIA GPU
+
+```bash
+./install.sh --gpu
+~/.local/share/pixydeck/venv/bin/pixydeck-gpu-benchmark
+```
+
+The benchmark exercises the same JPEG → chroma key → composite → crop/resize → I420 path as the processed virtual camera. Record the GPU model, driver, CPU/CUDA ms per frame, speed-up and CuPy pool size. During a real call, confirm the log contains `CUDA render pipeline`; a run with `PIXYDECK_DISABLE_CUDA=1` must still work through the CPU path.
+
 ## From source, without installing
 
 ```bash
@@ -50,12 +59,16 @@ Reads every on-board setting and round-trips motor speed, tracking target and lo
 - [ ] Presets: store, recall, startup position
 - [ ] Tracking / privacy / gesture switch on the camera; gesture changes show up in the UI within ~3 s
 - [ ] AI focus: center, face, click point (yellow marker)
+- [ ] Restart PixyDeck: the selected focus mode and click point are restored
+- [ ] Calls: *Keep focus steady* locks focus at call start and releases only the lock it set
 - [ ] Mirror / flip / auto-rotate
 - [ ] Picture sliders change the image; auto/manual toggles; reset
 - [ ] Auto-framing with face overlay
 - [ ] Background: AI blur, gradient, colour, image; green screen if available
 - [ ] Stabilization: tap the monitor, picture stays steady
 - [ ] Privacy timer counts down when the preview is released; wakes when another app opens the camera
+- [ ] Start PixyDeck after an idle/call-ended privacy transition: it resumes the previous mode without a wake/privacy flicker
+- [ ] In privacy mode, changing *Mute in privacy mode* immediately mutes/unmutes the PIXY microphone
 - [ ] Snapshot saved to `~/Pictures/EMEET PIXY`
 
 ## Installed

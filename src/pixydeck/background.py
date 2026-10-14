@@ -14,6 +14,7 @@ mask - so it has to see frames in order on a single thread.
 
 from __future__ import annotations
 
+import logging
 import os
 import threading
 from dataclasses import dataclass, field
@@ -26,6 +27,8 @@ try:
     import onnxruntime
 except ImportError:  # pragma: no cover - optional extra
     onnxruntime = None
+
+log = logging.getLogger(__name__)
 
 MATTING_MODEL = Path(__file__).resolve().parent / "assets" / "rvm_mobilenetv3_fp32.onnx"
 # RVM input size; the mask is scaled up to the frame afterwards.
@@ -123,6 +126,30 @@ def matting_available() -> bool:
     return onnxruntime is not None and MATTING_MODEL.exists()
 
 
+def matting_providers() -> list[str]:
+    """Prefer an installed GPU execution provider, with CPU as fallback."""
+    if onnxruntime is None:
+        return []
+    available = onnxruntime.get_available_providers()
+    return [provider for provider in (
+        "CUDAExecutionProvider", "ROCMExecutionProvider", "CPUExecutionProvider"
+    ) if provider in available]
+
+
+def matting_provider_options(providers: list[str]) -> list[dict]:
+    """Bound ONNX GPU allocations; keep CPU/unknown providers at defaults."""
+    try:
+        limit_mb = int(os.environ.get("PIXYDECK_ORT_GPU_MEMORY_MB", "1024"))
+    except ValueError:
+        limit_mb = 1024
+    limit = max(256, min(limit_mb, 8192)) * 1024 * 1024
+    return [
+        {"gpu_mem_limit": str(limit), "arena_extend_strategy": "kSameAsRequested"}
+        if provider in ("CUDAExecutionProvider", "ROCMExecutionProvider") else {}
+        for provider in providers
+    ]
+
+
 class Matting:
     """Stateful RVM session: call ``alpha`` with consecutive frames."""
 
@@ -132,8 +159,12 @@ class Matting:
         # with ORT's default spinning were fastest (36 ms vs 51 ms at 4).
         options.intra_op_num_threads = threads or max(2, min(6, (os.cpu_count() or 4) // 2))
         options.inter_op_num_threads = 1
+        providers = matting_providers()
         self._session = onnxruntime.InferenceSession(
-            str(MATTING_MODEL), options, providers=["CPUExecutionProvider"])
+            str(MATTING_MODEL), options, providers=providers,
+            provider_options=matting_provider_options(providers))
+        self.provider = self._session.get_providers()[0]
+        log.info("AI matting provider: %s", self.provider)
         self._ratio = np.array([0.4], np.float32)
         self.reset()
 

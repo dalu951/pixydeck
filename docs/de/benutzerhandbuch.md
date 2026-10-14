@@ -46,7 +46,7 @@ Gefüllt wird mit **Unschärfe**, **Verlauf**, **Farbe** oder einem eigenen **Bi
 
 ## Tab „Calls“
 
-- **Anrufe:** Mit *Detect calls* bemerkt PixyDeck, wenn Meet, Zoom, Teams, WhatsApp, OBS … die PIXY oder die virtuelle Kamera öffnen (oben steht dann *📞 Call*). Zu Beginn schaltet es das Face-Tracking ein (mit *Keep mode* verlässt es nur den Privacy-Modus) und kann das PIXY-Mikrofon zum Standard-Eingang machen; ein paar Sekunden nachdem die letzte App die Kamera freigibt, dreht die Linse weg (*Privacy when the call ends*) und das vorherige Mikrofon wird wiederhergestellt. Ein kurzer Gerätetest des Browsers zählt nicht als Anruf. Liest die App die PIXY direkt, während Effekte aktiv sind, weist PixyDeck auf die virtuelle Kamera hin.
+- **Anrufe:** Mit *Detect calls* bemerkt PixyDeck, wenn Meet, Zoom, Teams, WhatsApp, OBS … die PIXY oder die virtuelle Kamera öffnen (oben steht dann *📞 Call*). Zu Beginn schaltet es das Face-Tracking ein (mit *Keep mode* verlässt es nur den Privacy-Modus), kann das PIXY-Mikrofon zum Standard-Eingang machen und den aktuellen Fokus gegen Pumpen sperren; ein paar Sekunden nachdem die letzte App die Kamera freigibt, dreht die Linse weg (*Privacy when the call ends*), das vorherige Mikrofon wird wiederhergestellt und nur eine vom Anruf gesetzte Fokussperre gelöst. Ein kurzer Gerätetest des Browsers zählt nicht als Anruf. Liest die App die PIXY direkt, während Effekte aktiv sind, weist PixyDeck auf die virtuelle Kamera hin.
 - **Privacy-Timer:** geht nach der eingestellten Leerlaufzeit in den Privacy-Modus und verlässt ihn, sobald eine andere App die Kamera öffnet. Solange die Vorschau sichtbar ist, pausiert er.
 - **Mikrofon:** DSP-Modus der PIXY (Geräuschunterdrückung, Live, Original) und Stummschalten im Privacy-Modus.
 

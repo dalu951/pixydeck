@@ -14,6 +14,7 @@ Start with **⚙ Setup** in PixyDeck – it checks permissions, the kernel modul
 | **Zoom slider is greyed out** | The camera is released to another app and the video mode ignores hardware zoom (above 1080p, or 1080p at 60 fps). Use the processed virtual camera for digital zoom. |
 | **AI options are greyed out** | OpenCV/ONNX Runtime are missing. Packages install them; with `install.sh` run `~/.local/share/pixydeck/venv/bin/pip install 'pixydeck[ai]'` from the source folder. |
 | **Low frame rate with AI background** | AI matting needs about 30 ms per frame on the CPU. Use 1080p instead of 4K, or a green screen. |
+| **`--gpu` still uses the CPU** | Run `nvidia-smi`, then `~/.local/share/pixydeck/venv/bin/pixydeck-gpu-benchmark`. The log names the CUDA device or the fallback reason. `PIXYDECK_DISABLE_CUDA=1` also forces CPU rendering. |
 | **The camera tilts into its base** | Positions below −52° are blocked since 0.3.0; store the preset again. |
 | **Warning about `libvdpau_nvidia.so`** | Qt probes optional hardware decoders; harmless if the preview works. |
 

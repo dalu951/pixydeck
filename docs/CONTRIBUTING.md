@@ -28,6 +28,10 @@ Python `>=3.10`.
 | `numpy>=1.24` | extra `[ai]` |
 | `opencv-python-headless>=4.8` | extra `[ai]` |
 | `onnxruntime>=1.17` | extra `[ai]` |
+| `numpy>=1.24` | extra `[gpu]` |
+| `opencv-python-headless>=4.8` | extra `[gpu]` |
+| `onnxruntime-gpu>=1.17` | extra `[gpu]` |
+| `cupy-cuda12x>=13.0` | extra `[gpu]` |
 <!-- /AUTO-GENERATED:dependencies -->
 
 ## Commands
@@ -37,6 +41,7 @@ Python `>=3.10`.
 | --- | --- |
 | `pixydeck` | `pixydeck.gui:main` |
 | `pixydeck-cli` | `pixydeck.backend:main` |
+| `pixydeck-gpu-benchmark` | `pixydeck.gpu_benchmark:main` |
 | `python tools/gen_docs.py` | Regenerate AUTO-GENERATED doc sections |
 | `python tools/gen_docs.py --check` | Fail if docs are stale (CI) |
 | `QT_QPA_PLATFORM=offscreen PYTHONPATH=src python -m unittest discover -s tests` | Run the test suite |
