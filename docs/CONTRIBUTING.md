@@ -30,8 +30,8 @@ Python `>=3.10`.
 | `onnxruntime>=1.17` | extra `[ai]` |
 | `numpy>=1.24` | extra `[gpu]` |
 | `opencv-python-headless>=4.8` | extra `[gpu]` |
-| `onnxruntime-gpu>=1.17` | extra `[gpu]` |
-| `cupy-cuda12x>=13.0` | extra `[gpu]` |
+| `onnxruntime-gpu[cuda,cudnn]>=1.21,<1.24` | extra `[gpu]` |
+| `cupy-cuda12x[ctk]>=14.0,<15` | extra `[gpu]` |
 <!-- /AUTO-GENERATED:dependencies -->
 
 ## Commands
