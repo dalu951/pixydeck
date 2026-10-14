@@ -11,7 +11,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import cv2
 import numpy as np
 
-from .background import Background
+from .background import Background, Matting
 from .cuda import CudaRenderer, cp, cuda_available
 from .vision import Crop, FrameProcessor
 
@@ -42,6 +42,21 @@ def measure(label, render, frames: int, warmup: int) -> float:
     return fps
 
 
+def measure_matting(image, frames: int, warmup: int) -> float:
+    """Report the real ONNX provider and synchronous model throughput."""
+    matting = Matting()
+    for _ in range(warmup):
+        matting.alpha(image)
+    started = time.perf_counter()
+    for _ in range(frames):
+        matting.alpha(image)
+    elapsed = time.perf_counter() - started
+    fps = frames / elapsed
+    print(f"  AI: {fps:6.1f} fps · {elapsed * 1000 / frames:5.1f} ms/frame "
+          f"· ONNX {matting.provider}")
+    return fps
+
+
 def dimensions(value: str) -> tuple[int, int]:
     try:
         width, height = (int(part) for part in value.lower().split("x", 1))
@@ -63,6 +78,9 @@ def main() -> int:
         print("No usable CUDA device. Run ./install.sh --gpu and check nvidia-smi.")
         return 2
     jpeg = sample(*args.source)
+    image = cv2.imdecode(jpeg, cv2.IMREAD_REDUCED_COLOR_2)
+    if image is None:
+        raise RuntimeError("could not decode benchmark frame")
     background = Background(mode="chroma", fill="color", color=(20, 30, 80), key=(64.0, 85.0))
     renderer = CudaRenderer()
 
@@ -73,6 +91,7 @@ def main() -> int:
     print(f"GPU: {renderer.device_name}")
     print(f"Source: {args.source[0]}x{args.source[1]} · output: "
           f"{args.output[0]}x{args.output[1]} · chroma-key pipeline")
+    measure_matting(image, args.frames, args.warmup)
     cpu_fps = measure("CPU", render, args.frames, args.warmup)
     gpu_fps = measure("CUDA", lambda: render(renderer), args.frames, args.warmup)
     pool = cp.get_default_memory_pool()

@@ -11,6 +11,10 @@ case ${1:-} in
     *) echo "Usage: ./install.sh [--gpu]" >&2; exit 2 ;;
 esac
 
+if [[ $AI_EXTRA == gpu ]]; then
+    echo "Installing PixyDeck with NVIDIA CUDA support..."
+fi
+
 if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
     echo "Run ./install.sh as your normal desktop user, not as root." >&2
     exit 1
@@ -148,3 +152,11 @@ If HID controls are denied, unplug/replug the PIXY once (or log out/in).
 Virtual camera service status:
   systemctl status pixydeck-virtual-camera.service
 MSG
+
+if [[ $AI_EXTRA == gpu ]]; then
+    cat <<MSG
+
+CUDA installation check:
+  $VENV/bin/pixydeck-gpu-benchmark --frames 5 --warmup 1
+MSG
+fi

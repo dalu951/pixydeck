@@ -837,6 +837,8 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         if self.mode == VIRTUAL_PROCESSED:
             left += f"  ·  → virtual cam {self.output_fps:.0f} fps"
         right = []
+        if self.processor.matting_throttled:
+            right.append("AI BACKGROUND EASED")
         if self.autoframe.isChecked():
             right.append("AUTO-FRAME")
         if self.zoom_value > ZOOM_MIN:

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **AI background keeps the frame rate when inference is temporarily slow**: matting moves to a latest-frame worker after it exceeds one 30 fps frame and returns automatically when it recovers; the HUD shows *AI BACKGROUND EASED* while masks may trail motion slightly
 - Opening PixyDeck now resumes the mode used before automatic privacy and holds it while the preview is visible, instead of briefly waking the camera and immediately turning it away again
 - Focus mode and click-to-focus point survive restarts; stale camera readback no longer immediately overwrites a newly selected focus mode
 - Calls can optionally lock the current focus until the call ends, preventing continuous autofocus hunting without changing a manually enabled focus lock

@@ -22,7 +22,7 @@ import numpy as np
 from PySide6.QtCore import QCoreApplication
 
 from pixydeck import vision
-from pixydeck.background import Background, matting_available
+from pixydeck.background import MATTING_SIZE, Background, matting_available
 from pixydeck.vision import Crop, FrameProcessor, vision_available
 
 GREEN = (64, 177, 0)
@@ -318,6 +318,82 @@ class OutputPipelineTest(PipelineTestCase):
         first = self.processor.output_pid
         self.start()
         self.assertNotEqual(self.processor.output_pid, first)
+
+
+class SlowMatting:
+    """Stand-in for the recurrent model with a configurable frame cost."""
+
+    def __init__(self, cost):
+        self.cost = cost
+        self.calls = 0
+
+    def alpha(self, image):
+        self.calls += 1
+        time.sleep(self.cost)
+        return np.zeros((MATTING_SIZE[1], MATTING_SIZE[0]), np.float32)
+
+    def reset(self):
+        pass
+
+
+@unittest.skipUnless(vision_available(), "needs OpenCV")
+class MattingThrottleTest(PipelineTestCase):
+    """Slow inference must reduce matte frequency, not output frame rate."""
+
+    WIDTH, HEIGHT, FPS = 320, 180, 30
+
+    def setUp(self):
+        super().setUp()
+        self.sink = Path(self.tmp.name) / "out.yuv"
+        script = Path(self.tmp.name) / "ffmpeg"
+        script.write_text(f"#!/bin/sh\ncat > '{self.sink}'\n")
+        script.chmod(0o755)
+        self.processor.set_background(Background(mode="ai", fill="color", color=(0, 0, 0)))
+        self.processor.start_output(str(script), "/dev/null", self.WIDTH, self.HEIGHT, self.FPS)
+        self.jpeg = encode(textured(self.WIDTH, self.HEIGHT))
+
+    def feed(self, seconds):
+        start, sent = time.monotonic(), 0
+        while time.monotonic() - start < seconds:
+            self.processor.submit(self.jpeg, self.WIDTH)
+            sent += 1
+            self.app.processEvents()
+            time.sleep(max(0.0, start + sent / self.FPS - time.monotonic()))
+
+    def frames(self):
+        size = self.sink.stat().st_size if self.sink.exists() else 0
+        return size // (self.WIDTH * self.HEIGHT * 3 // 2)
+
+    def test_fast_matting_keeps_one_matte_per_frame(self):
+        self.processor._matting = SlowMatting(0.005)
+        self.feed(1.0)
+        self.assertFalse(self.processor.matting_throttled)
+        self.assertGreater(self.processor._matting.calls, 20)
+
+    def test_slow_matting_does_not_slow_the_virtual_camera(self):
+        self.processor._matting = SlowMatting(0.12)
+        self.feed(0.5)
+        before = self.frames()
+        self.feed(1.5)
+        self.assertTrue(self.processor.matting_throttled)
+        self.assertGreater((self.frames() - before) / 1.5, 22)
+        self.assertLess(self.processor._matting.calls, 25)
+
+    def test_back_to_every_frame_when_compute_is_free_again(self):
+        self.processor._matting = SlowMatting(0.08)
+        self.feed(0.6)
+        self.assertTrue(self.processor.matting_throttled)
+        self.processor._matting.cost = 0.002
+        self.feed(1.0)
+        self.assertFalse(self.processor.matting_throttled)
+
+    def test_shutdown_stops_the_matting_thread(self):
+        self.processor._matting = SlowMatting(0.06)
+        self.feed(0.5)
+        thread = self.processor._matte_thread
+        self.assertIsNotNone(thread)
+        self.processor.shutdown()
+        self.assertFalse(thread.is_alive())
 
 
 if __name__ == "__main__":
