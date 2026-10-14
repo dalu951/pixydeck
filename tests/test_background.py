@@ -2,6 +2,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -13,6 +14,7 @@ import cv2
 from pixydeck.background import (
     DEFAULT_KEY, MATTING_SIZE, Background, Matting, blurred, composite, cover, despill,
     detect_green_screen, gradient_background, key_alpha, matting_available,
+    matting_provider_options, matting_providers,
 )
 
 GREEN = (64, 177, 0)       # BGR chroma-key green
@@ -212,6 +214,30 @@ class ModeTest(unittest.TestCase):
         # Auto falls back to AI matting while no green screen is detected.
         self.assertTrue(Background(mode="auto").uses_matting)
         self.assertFalse(Background(mode="chroma").uses_matting)
+
+    def test_matting_prefers_cuda_then_cpu(self):
+        with mock.patch("pixydeck.background.onnxruntime.get_available_providers",
+                        return_value=["CPUExecutionProvider", "CUDAExecutionProvider"]):
+            self.assertEqual(matting_providers(), ["CUDAExecutionProvider", "CPUExecutionProvider"])
+
+    def test_gpu_matting_memory_is_bounded(self):
+        with mock.patch.dict("os.environ", {"PIXYDECK_ORT_GPU_MEMORY_MB": "512"}):
+            options = matting_provider_options(["CUDAExecutionProvider", "CPUExecutionProvider"])
+        self.assertEqual(options[0]["gpu_mem_limit"], str(512 * 1024 * 1024))
+        self.assertEqual(options[1], {})
+
+    def test_matting_preloads_wheel_cuda_libraries(self):
+        session = mock.Mock()
+        session.get_providers.return_value = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        with (
+            mock.patch("pixydeck.background.onnxruntime.get_available_providers",
+                       return_value=["CUDAExecutionProvider", "CPUExecutionProvider"]),
+            mock.patch("pixydeck.background.onnxruntime.preload_dlls") as preload,
+            mock.patch("pixydeck.background.onnxruntime.InferenceSession", return_value=session),
+        ):
+            matting = Matting(threads=1)
+        preload.assert_called_once_with(directory="")
+        self.assertEqual(matting.provider, "CUDAExecutionProvider")
 
 
 @unittest.skipUnless(matting_available(), "RVM model / onnxruntime not installed")

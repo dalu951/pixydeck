@@ -226,6 +226,15 @@ class ZoomTest(WindowCase):
         w.on_output_fps(24.6)
         self.assertIn("virtual cam 25 fps", w.view.hud_left.text())
 
+    def test_hud_says_when_ai_background_is_eased(self):
+        w = self.window
+        w.processor._matting_async = True
+        w.update_hud()
+        self.assertIn("AI BACKGROUND EASED", w.view.hud_right.text())
+        w.processor._matting_async = False
+        w.update_hud()
+        self.assertNotIn("AI BACKGROUND EASED", w.view.hud_right.text())
+
     def test_hud_not_updated_without_own_stream(self):
         w = self.window
         w.update_hud()

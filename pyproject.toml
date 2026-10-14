@@ -38,6 +38,17 @@ ai = [
   "opencv-python-headless>=4.8",
   "onnxruntime>=1.17",
 ]
+# Same AI features, with NVIDIA CUDA acceleration for the matting model.
+# Use this instead of [ai] on a machine with a compatible NVIDIA driver.
+gpu = [
+  "numpy>=1.24",
+  "opencv-python-headless>=4.8",
+  # Keep ONNX Runtime and CuPy on one self-contained CUDA 12 stack. The
+  # extras install cuBLAS/cuDNN/NVRTC and headers; a driver alone is not a
+  # complete user-space CUDA runtime.
+  "onnxruntime-gpu[cuda,cudnn]>=1.21,<1.24",
+  "cupy-cuda12x[ctk]>=14.0,<15",
+]
 
 [project.urls]
 Homepage = "https://github.com/dalu951/pixydeck"
@@ -46,6 +57,7 @@ Issues = "https://github.com/dalu951/pixydeck/issues"
 [project.scripts]
 pixydeck = "pixydeck.gui:main"
 pixydeck-cli = "pixydeck.backend:main"
+pixydeck-gpu-benchmark = "pixydeck.gpu_benchmark:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -60,6 +72,9 @@ pixydeck = ["assets/*.svg", "assets/*.onnx"]
 [tool.coverage.run]
 branch = true
 source = ["src/pixydeck"]
+# These paths need an actual NVIDIA device; discovery and CPU fallback are
+# covered in CI, while docs/TESTING.md defines the opt-in hardware benchmark.
+omit = ["src/pixydeck/cuda.py", "src/pixydeck/gpu_benchmark.py"]
 
 [tool.coverage.report]
 skip_empty = true

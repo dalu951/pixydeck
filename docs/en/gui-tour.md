@@ -88,6 +88,7 @@ Effects show in the preview, in snapshots and in *EMEET PIXY (PixyDeck)*. An app
 | **At the start** | *Face tracking* – turn tracking on · *Keep mode* – only leave privacy |
 | **Privacy when the call ends** | The lens turns away a few seconds after the last app lets go |
 | **Use the PIXY microphone** | Makes the PIXY the default microphone during the call and switches back afterwards |
+| **Keep focus steady during calls** | Locks the current focus at call start to prevent hunting; releases only this temporary lock afterwards |
 | **Privacy when idle** / **Idle time** | Enter privacy after the chosen minutes without any app using the camera (paused while the preview is visible) |
 | **Wake when an app needs the camera** | Leave privacy as soon as an app opens the camera |
 | **Microphone** | The PIXY's sound: *Noise cancel* · *Live* · *Original* |

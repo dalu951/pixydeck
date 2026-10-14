@@ -88,6 +88,7 @@ Die Effekte erscheinen in der Vorschau, in Schnappschüssen und in *EMEET PIXY (
 | **At the start** | *Face tracking* – Tracking einschalten · *Keep mode* – nur den Privacy-Modus verlassen |
 | **Privacy when the call ends** | Die Linse dreht ein paar Sekunden, nachdem die letzte App losgelassen hat, weg |
 | **Use the PIXY microphone** | Macht die PIXY während des Anrufs zum Standard-Mikrofon und schaltet danach zurück |
+| **Keep focus steady during calls** | Sperrt den aktuellen Fokus beim Anrufstart gegen Pumpen und löst danach nur diese vorübergehende Sperre |
 | **Privacy when idle** / **Idle time** | Nach der eingestellten Zeit ohne App an der Kamera in den Privacy-Modus (pausiert, solange die Vorschau sichtbar ist) |
 | **Wake when an app needs the camera** | Privacy-Modus verlassen, sobald eine App die Kamera öffnet |
 | **Microphone** | Klang der PIXY: *Noise cancel* (Geräuschunterdrückung) · *Live* · *Original* |

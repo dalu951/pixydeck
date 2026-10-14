@@ -44,6 +44,18 @@ cd pixydeck
 
 The script installs PixyDeck into a private virtual environment in `~/.local/share/pixydeck`, adds the menu entry, and asks for `sudo` once to install the udev rules, the polkit action, the setup helper and the virtual-camera service. It replaces an earlier *emeet-pixy-control* installation and carries over its settings.
 
+### Optional NVIDIA acceleration
+
+On a machine with a compatible NVIDIA driver and CUDA 12 runtime, use `./install.sh --gpu`. ONNX Runtime then runs AI person matting on CUDA; a small CuPy renderer keeps green-screen keying, blur, compositing, the stabilization transform, crop/resize and I420 conversion on the GPU. JPEG decoding, face detection, stabilization measurement and the final `v4l2loopback` transfer remain on the CPU. One CUDA render is kept in flight and CuPy's memory pool is capped at 25% of VRAM so PixyDeck does not crowd out meeting apps. Any CUDA error switches the session to the CPU renderer instead of stopping the camera.
+
+Verify the local hardware path after installation:
+
+```bash
+~/.local/share/pixydeck/venv/bin/pixydeck-gpu-benchmark
+```
+
+The command prints the detected GPU, CPU/CUDA frame times, speed-up and the retained CuPy memory pool. Set `PIXYDECK_CUDA_MEMORY_FRACTION=0.15` to lower the default CuPy VRAM cap, `PIXYDECK_ORT_GPU_MEMORY_MB=512` to lower ONNX Runtime's 1 GiB default limit, or `PIXYDECK_DISABLE_CUDA=1` to force the CPU path.
+
 ## First start
 
 PixyDeck checks your system when it starts. If something is missing, the **⚙ Setup** dialog opens:
@@ -63,7 +75,7 @@ Every fix asks for your password in the system's polkit dialog and runs only the
 
 - **.deb:** install the newer `.deb` the same way.
 - **AUR:** your AUR helper updates it with the system.
-- **Script:** `git pull && ./install.sh`.
+- **Script:** `git pull && ./install.sh` (or `./install.sh --gpu` to keep the CUDA variant).
 
 ## Uninstalling
 

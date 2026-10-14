@@ -34,6 +34,8 @@ except ImportError:  # pragma: no cover - depends on optional extra
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QImage
 
+from .cuda import CudaRenderer, cuda_available
+
 log = logging.getLogger(__name__)
 
 if cv2 is not None:
@@ -52,6 +54,12 @@ DETECT_INTERVAL = 0.15
 # while it moves quickly (sitting down, standing up).
 DETECT_SCORE = 0.6
 GREEN_CHECK_INTERVAL = 0.5
+# AI background: while the matting model keeps up, every frame gets its own
+# matte. When inference takes longer than one 30 fps frame, only the newest
+# frame is queued for matting so rendering and the virtual camera stay live.
+# Hysteresis avoids switching modes repeatedly around the threshold.
+MATTING_SYNC_BUDGET = 0.033
+MATTING_RESYNC = 0.024
 # Keying works on a frame of at most this width (half-decoded 4K).
 KEY_WIDTH = 1920
 # A full 4K JPEG decode takes ~30 ms; decoding frames in parallel keeps the
@@ -297,14 +305,33 @@ class FrameProcessor(QObject):
         self._preview_pending = False
         self._preview_lock = threading.Lock()
         self._matting = None
+        self._matting_lock = threading.Lock()  # recurrent state: one inference at a time
+        self._matting_ms = 0.0
+        self._matting_async = False
+        self._matte_cond = threading.Condition()
+        self._matte_pending = None
+        self._matte_latest = None
+        self._matte_thread: threading.Thread | None = None
+        self._cuda = None
+        self._cuda_failed = False
+        if cuda_available():
+            try:
+                self._cuda = CudaRenderer()
+                log.info("CUDA render pipeline: %s", self._cuda.device_name)
+            except Exception as exc:  # noqa: BLE001 - CPU fallback is intentional
+                self._cuda_failed = True
+                log.warning("CUDA renderer unavailable, using CPU: %s", exc)
         self._stabilizer = Stabilizer() if cv2 is not None else None
         self._stabilize = False
         if cv2 is not None:
             # Parallelism comes from the render pool; nested OpenCV thread
             # pools per worker would oversubscribe the CPU.
             cv2.setNumThreads(RENDER_THREADS - 1)
-        self._pool = ThreadPoolExecutor(RENDER_THREADS, thread_name_prefix="pixy-render")
-        self._in_flight = threading.Semaphore(RENDER_THREADS)
+        # A single CUDA job keeps allocations bounded and avoids queueing stale
+        # frames. CPU rendering still uses parallel JPEG/render workers.
+        render_threads = 1 if self._cuda is not None else RENDER_THREADS
+        self._pool = ThreadPoolExecutor(render_threads, thread_name_prefix="pixy-render")
+        self._in_flight = threading.Semaphore(render_threads)
         self._rendered: queue.Queue[Future | None] = queue.Queue()
         self._thread = threading.Thread(target=self._run, name="pixy-vision", daemon=True)
         self._thread.start()
@@ -317,6 +344,15 @@ class FrameProcessor(QObject):
         background = self._background
         return self._detect or self._output is not None or self._stabilize or (
             background is not None and background.mode != "off")
+
+    @property
+    def acceleration(self) -> str:
+        return f"CUDA ({self._cuda.device_name})" if self._cuda is not None else "CPU"
+
+    @property
+    def matting_throttled(self) -> bool:
+        """True while matting trails frames to preserve output throughput."""
+        return self._matting_async
 
     def set_stabilization(self, enabled: bool) -> None:
         self._stabilize = enabled and self._stabilizer is not None
@@ -427,6 +463,11 @@ class FrameProcessor(QObject):
         return process.pid if process is not None else None
 
     def shutdown(self) -> None:
+        with self._matte_cond:
+            self._matte_thread, thread = None, self._matte_thread
+            self._matte_cond.notify_all()
+        if thread is not None:
+            thread.join(timeout=2)
         self.stop_output()
         with self._cond:
             self._running = False
@@ -476,25 +517,68 @@ class FrameProcessor(QObject):
             if (process is not None or want_preview) and self._in_flight.acquire(blocking=False):
                 matte = None
                 if keyed and background.uses_matting:
-                    # Recurrent model: must see frames in order, on this thread.
+                    # The recurrent model is serialized; slow inference switches
+                    # to a latest-frame worker so it cannot stall output.
                     matte = self._run_matting(jpeg)
                 # Frames are rendered in parallel but written strictly in order.
-                future = self._pool.submit(self._render, jpeg, self._crop, self._output_size, source_width,
-                                           background if keyed else None, process is not None, matte,
-                                           shake, want_preview)
+                future = self._pool.submit(
+                    self._render_frame, jpeg, self._crop, self._output_size, source_width,
+                    background if keyed else None, process is not None, matte, shake, want_preview)
                 self._rendered.put((process, future))
             # else: all render slots busy -> drop this frame instead of queueing lag.
 
     def _run_matting(self, jpeg):
-        if self._matting is None:
-            try:
-                self._matting = Matting()
-            except Exception as exc:  # noqa: BLE001 - surface any model/runtime problem
-                self.output_error.emit(f"AI background unavailable: {exc}")
-                self._background.mode = "off"
+        """Return this frame's matte, or the newest completed asynchronous one."""
+        if not self._matting_async:
+            matte = self._compute_matte(jpeg)
+            if self._matting_ms > MATTING_SYNC_BUDGET * 1000:
+                self._matting_async = True
+                log.info("AI background eased: matting takes %.0f ms", self._matting_ms)
+            return matte
+
+        with self._matte_cond:
+            self._matte_pending = jpeg  # stale queued frames have no value
+            if self._matte_thread is None:
+                self._matte_thread = threading.Thread(
+                    target=self._matte_loop, name="pixy-matting", daemon=True)
+                self._matte_thread.start()
+            self._matte_cond.notify_all()
+            latest = self._matte_latest
+        if self._matting_ms < MATTING_RESYNC * 1000:
+            self._matting_async = False
+            log.info("AI background back to every frame: matting takes %.0f ms", self._matting_ms)
+        return latest
+
+    def _matte_loop(self) -> None:
+        me = threading.current_thread()
+        while True:
+            with self._matte_cond:
+                while self._matte_thread is me and self._matte_pending is None:
+                    self._matte_cond.wait()
+                if self._matte_thread is not me:
+                    return
+                jpeg, self._matte_pending = self._matte_pending, None
+            self._compute_matte(jpeg)
+
+    def _compute_matte(self, jpeg):
+        with self._matting_lock:
+            if self._matting is None:
+                try:
+                    self._matting = Matting()
+                except Exception as exc:  # noqa: BLE001 - surface any model/runtime problem
+                    self.output_error.emit(f"AI background unavailable: {exc}")
+                    self._background.mode = "off"
+                    return None
+            image = cv2.imdecode(jpeg, cv2.IMREAD_REDUCED_COLOR_2)
+            if image is None:
                 return None
-        image = cv2.imdecode(jpeg, cv2.IMREAD_REDUCED_COLOR_2)
-        return None if image is None else self._matting.alpha(image)
+            started = time.monotonic()
+            matte = self._matting.alpha(image)
+            spent = (time.monotonic() - started) * 1000
+        self._matting_ms = spent if self._matting_ms == 0 else self._matting_ms * 0.8 + spent * 0.2
+        with self._matte_cond:
+            self._matte_latest = matte
+        return matte
 
     def _check_green_screen(self, small, background) -> None:
         if small is None:
@@ -593,10 +677,22 @@ class FrameProcessor(QObject):
                 faces.append((x / width, y / height, w / width, h / height))
         self.faces_detected.emit(faces)
 
+    def _render_frame(self, *args):
+        """Use CUDA when active; disable it permanently after the first failure."""
+        if self._cuda is not None:
+            try:
+                return self._render(*args, cuda_renderer=self._cuda)
+            except Exception as exc:  # noqa: BLE001 - safe CPU fallback is the contract
+                self._cuda = None
+                if not self._cuda_failed:
+                    self._cuda_failed = True
+                    log.warning("CUDA render failed, continuing on CPU: %s", exc, exc_info=True)
+        return self._render(*args)
+
     @staticmethod
     def _render(jpeg, crop: Crop, size: tuple[int, int], source_width: int,
                 background, want_output: bool, matte=None, shake=(0.0, 0.0),
-                want_preview: bool = False) -> tuple[bytes | None, QImage | None]:
+                want_preview: bool = False, cuda_renderer=None) -> tuple[bytes | None, QImage | None]:
         """Decode one frame; return (YUV420 output bytes, processed preview image)."""
         crop = crop.clamped()
         out_w, out_h = size
@@ -607,6 +703,9 @@ class FrameProcessor(QObject):
             image = cv2.imdecode(jpeg, cv2.IMREAD_REDUCED_COLOR_2 if reduced else cv2.IMREAD_COLOR)
             if image is None:
                 return None, None
+            if cuda_renderer is not None:
+                return cuda_renderer.render(image, crop, size, background, want_output, matte,
+                                            shake, want_preview)
             if background is not None:
                 if background.uses_matting and matte is None:
                     return None, None
@@ -623,6 +722,9 @@ class FrameProcessor(QObject):
             image = cv2.imdecode(jpeg, cv2.IMREAD_REDUCED_COLOR_2 if reduced else cv2.IMREAD_COLOR)
             if image is None:
                 return None, None
+            if cuda_renderer is not None:
+                return cuda_renderer.render(image, crop, size, background, want_output, matte,
+                                            shake, want_preview)
         if not want_output:
             return None, preview
         height, width = image.shape[:2]

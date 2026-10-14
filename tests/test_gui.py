@@ -181,6 +181,28 @@ class ControlsTest(GuiTestCase):
             self.assertTrue(self.settle(lambda: mute.call_count == 2))
             mute.assert_called_with(False)
 
+    def test_privacy_mute_preference_applies_immediately(self):
+        w = self.window
+        w.privacy_mic.setEnabled(True)
+        w.set_tracking_mode("privacy")
+        with mock.patch.object(controls, "set_pixy_microphone_muted") as mute:
+            w.privacy_mic.setChecked(True)
+            self.assertTrue(self.settle(lambda: mute.call_count == 1))
+            mute.assert_called_with(True)
+            w.privacy_mic.setChecked(False)
+            self.assertTrue(self.settle(lambda: mute.call_count == 2))
+            mute.assert_called_with(False)
+
+    def test_opening_window_resumes_mode_from_before_privacy(self):
+        settings = QSettings("pixydeck", "pixydeck")
+        settings.setValue("camera/tracking", "privacy")
+        settings.setValue("camera/mode_before_privacy", "track")
+        self.close_window()
+        self.window = gui.PixyGUI()
+        self.controller = self.window.controller
+        self.assertEqual(self.window.tracking_mode, "track")
+        self.assertEqual(settings.value("camera/tracking"), "track")
+
     def test_click_point_focus_uses_frame_coordinates(self):
         w = self.window
         w.focus_mode.set_current("area")
@@ -193,6 +215,20 @@ class ControlsTest(GuiTestCase):
         self.window.on_preview_click(0.5, 0.5)
         self.settle(timeout=0.2)
         self.assertFalse(self.called("focus_mode"))
+
+    def test_focus_mode_and_point_are_restored(self):
+        settings = QSettings("pixydeck", "pixydeck")
+        settings.setValue("camera/focus", "area")
+        settings.setValue("camera/focus_x", 0.25)
+        settings.setValue("camera/focus_y", 0.75)
+        self.close_window()
+        self.window = gui.PixyGUI()
+        self.controller = self.window.controller
+        self.assertEqual(self.window.focus_mode.current(), "area")
+        self.assertEqual(self.window.focus_point, (0.25, 0.75))
+        self.window.restore_camera_state()
+        self.assertTrue(self.settle(lambda: ("focus_mode", "area", 0.25, 0.75)
+                                    in self.controller.calls))
 
     def test_camera_state_sync(self):
         w = self.window

@@ -44,6 +44,18 @@ cd pixydeck
 
 Das Skript installiert PixyDeck in eine eigene Python-Umgebung unter `~/.local/share/pixydeck`, legt den Menüeintrag an und fragt einmal per `sudo` nach dem Passwort, um udev-Regeln, Polkit-Aktion, Setup-Helfer und den Dienst für die virtuelle Kamera einzurichten. Eine ältere *emeet-pixy-control*-Installation wird ersetzt, ihre Einstellungen werden übernommen.
 
+### Optionale NVIDIA-Beschleunigung
+
+Auf einem Rechner mit passendem NVIDIA-Treiber und CUDA-12-Laufzeit `./install.sh --gpu` verwenden. ONNX Runtime berechnet dann die KI-Personenfreistellung mit CUDA; ein kleiner CuPy-Renderer hält Greenscreen-Keying, Weichzeichnung, Compositing, Stabilisierungstransformation, Crop/Resize und I420-Konvertierung auf der GPU. JPEG-Dekodierung, Gesichtserkennung, Messung der Kamerabewegung und die abschließende Übergabe an `v4l2loopback` bleiben auf der CPU. Es ist nur ein CUDA-Render gleichzeitig aktiv und der CuPy-Speicherpool ist auf 25 % des VRAM begrenzt, damit genug Ressourcen für Meeting-Apps bleiben. Bei einem CUDA-Fehler wechselt die laufende Sitzung auf den CPU-Renderer, statt die Kamera zu stoppen.
+
+Den lokalen Hardwarepfad nach der Installation prüfen:
+
+```bash
+~/.local/share/pixydeck/venv/bin/pixydeck-gpu-benchmark
+```
+
+Der Befehl zeigt erkannte GPU, CPU-/CUDA-Bildzeiten, Beschleunigung und den gehaltenen CuPy-Speicherpool. Mit `PIXYDECK_CUDA_MEMORY_FRACTION=0.15` lässt sich das CuPy-Limit senken, mit `PIXYDECK_ORT_GPU_MEMORY_MB=512` das standardmäßig 1 GiB große ONNX-Limit; `PIXYDECK_DISABLE_CUDA=1` erzwingt den CPU-Pfad.
+
 ## Erster Start
 
 Beim Start prüft PixyDeck das System. Fehlt etwas, öffnet sich der Dialog **⚙ Setup**:
@@ -63,7 +75,7 @@ Jede Reparatur fragt im Polkit-Dialog deines Systems nach dem Passwort und führ
 
 - **.deb:** das neuere `.deb` genauso installieren.
 - **AUR:** dein AUR-Helfer aktualisiert es mit dem System.
-- **Skript:** `git pull && ./install.sh`.
+- **Skript:** `git pull && ./install.sh` (oder `./install.sh --gpu`, um die CUDA-Variante beizubehalten).
 
 ## Deinstallieren
 

@@ -198,6 +198,26 @@ class CallsWindowTest(GuiTestCase):
         self.settle(lambda: False, timeout=0.3)
         self.assertEqual(self.calls_mic, [])
 
+    def test_optional_focus_lock_is_scoped_to_the_call(self):
+        w = self.window
+        w.calls_focus_lock.setChecked(True)
+        self.start_call()
+        self.assertTrue(self.settle(lambda: ("lock", "focus", True) in self.controller.calls))
+        self.assertTrue(w.lock_toggles["focus"].isChecked())
+        self.end_call()
+        self.assertTrue(self.settle(lambda: ("lock", "focus", False) in self.controller.calls))
+        self.assertFalse(w.lock_toggles["focus"].isChecked())
+
+    def test_existing_focus_lock_is_not_released_after_call(self):
+        w = self.window
+        w.lock_toggles["focus"].set_silently(True)
+        w.calls_focus_lock.setChecked(True)
+        self.start_call()
+        self.end_call()
+        self.settle(timeout=0.2)
+        self.assertNotIn(("lock", "focus", False), self.controller.calls)
+        self.assertTrue(w.lock_toggles["focus"].isChecked())
+
     def test_closing_mid_call_restores_the_microphone(self):
         w = self.window
         w.microphone_before_call = "desk-mic"
@@ -217,6 +237,7 @@ class CallsWindowTest(GuiTestCase):
         settings.setValue("calls/enabled", True)
         settings.setValue("calls/start", "keep")
         settings.setValue("calls/privacy", False)
+        settings.setValue("calls/focus_lock", True)
         self.close_window()
         self.window = gui.PixyGUI()
         self.controller = self.window.controller
@@ -224,6 +245,7 @@ class CallsWindowTest(GuiTestCase):
         self.assertTrue(w.calls_enabled.isChecked())
         self.assertEqual(w.calls_start.current(), "keep")
         self.assertFalse(w.calls_privacy.isChecked())
+        self.assertTrue(w.calls_focus_lock.isChecked())
         self.assertIn("No call", w.calls_status.text())
 
     def test_unknown_start_action_falls_back_to_tracking(self):

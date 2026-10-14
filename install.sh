@@ -1,6 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if (($# > 1)); then
+    echo "Usage: ./install.sh [--gpu]" >&2
+    exit 2
+fi
+case ${1:-} in
+    "") AI_EXTRA=ai ;;
+    --gpu) AI_EXTRA=gpu ;;
+    *) echo "Usage: ./install.sh [--gpu]" >&2; exit 2 ;;
+esac
+
+if [[ $AI_EXTRA == gpu ]]; then
+    echo "Installing PixyDeck with NVIDIA CUDA support..."
+fi
+
 if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
     echo "Run ./install.sh as your normal desktop user, not as root." >&2
     exit 1
@@ -65,9 +79,20 @@ if [[ ! -x "$VENV/bin/python" ]]; then
     python3 -m venv "$VENV"
 fi
 
-if ! "$VENV/bin/python" -m pip install --upgrade "${ROOT}[ai]"; then
-    echo "AI extra (OpenCV/ONNX Runtime) could not be installed; continuing without AI features." >&2
-    "$VENV/bin/python" -m pip install --upgrade "$ROOT"
+if [[ $AI_EXTRA == gpu ]]; then
+    "$VENV/bin/python" -m pip uninstall -y onnxruntime >/dev/null 2>&1 || true
+else
+    "$VENV/bin/python" -m pip uninstall -y onnxruntime-gpu >/dev/null 2>&1 || true
+fi
+if ! "$VENV/bin/python" -m pip install --upgrade "${ROOT}[$AI_EXTRA]"; then
+    if [[ $AI_EXTRA == gpu ]]; then
+        echo "CUDA ONNX Runtime could not be installed; falling back to CPU AI support." >&2
+        "$VENV/bin/python" -m pip uninstall -y onnxruntime-gpu >/dev/null 2>&1 || true
+        "$VENV/bin/python" -m pip install --upgrade "${ROOT}[ai]"
+    else
+        echo "AI extra (OpenCV/ONNX Runtime) could not be installed; continuing without AI features." >&2
+        "$VENV/bin/python" -m pip install --upgrade "$ROOT"
+    fi
 fi
 
 install -m 0644 "$ROOT/src/pixydeck/assets/pixydeck.svg" "$ICON_FILE"
@@ -127,3 +152,11 @@ If HID controls are denied, unplug/replug the PIXY once (or log out/in).
 Virtual camera service status:
   systemctl status pixydeck-virtual-camera.service
 MSG
+
+if [[ $AI_EXTRA == gpu ]]; then
+    cat <<MSG
+
+CUDA installation check:
+  $VENV/bin/pixydeck-gpu-benchmark --frames 5 --warmup 1
+MSG
+fi

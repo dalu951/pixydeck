@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **AI background keeps the frame rate when inference is temporarily slow**: matting moves to a latest-frame worker after it exceeds one 30 fps frame and returns automatically when it recovers; the HUD shows *AI BACKGROUND EASED* while masks may trail motion slightly
+- Opening PixyDeck now resumes the mode used before automatic privacy and holds it while the preview is visible, instead of briefly waking the camera and immediately turning it away again
+- Focus mode and click-to-focus point survive restarts; stale camera readback no longer immediately overwrites a newly selected focus mode
+- Calls can optionally lock the current focus until the call ends, preventing continuous autofocus hunting without changing a manually enabled focus lock
+- Changing **Mute in privacy mode** now takes effect immediately while already in privacy mode
+- Optional `./install.sh --gpu` uses ONNX Runtime CUDA for AI matting and a resource-bounded CuPy renderer for keying, blur, compositing, stabilization transform, crop/resize and I420 conversion; one frame is processed at a time, the memory pool defaults to at most 25% of VRAM, any CUDA failure falls back to CPU, and `tools/benchmark_gpu.py` measures the real local hardware path
 - Docs: README rebuilt around “In 30 seconds”, grouped features, a numbered GUI tour and “Which camera do I pick?”; new [GUI tour](docs/en/gui-tour.md) page (English and German) explaining every control; new synthetic media – annotated window, Calls tab, and a before/after animation of the stabilizer
 - The media generator and the GUI tests can no longer start a real virtual camera writer
 

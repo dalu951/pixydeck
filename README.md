@@ -57,7 +57,7 @@ That's it. Everything else is optional.
 
 | | |
 | --- | --- |
-| 🪄 **Background** | AI blur or replacement without a green screen; automatic green-screen keying when one is in view |
+| 🪄 **Background** | AI blur or replacement without a green screen; automatic green-screen keying; optional NVIDIA CUDA render path |
 | 🫨 **Stabilization** | Optical-flow stabilizer with RANSAC – shake out, you and deliberate camera moves stay |
 | 🎛️ **Picture** | Brightness, colour, sharpness, gamma, gain; white balance, exposure and focus automatic, manual or locked; anti-flicker |
 
@@ -66,7 +66,7 @@ That's it. Everything else is optional.
 | | |
 | --- | --- |
 | 🎥 **Virtual camera** | *EMEET PIXY (PixyDeck)* carries every effect into any app, for several apps at once. It is the first camera in every list, so apps choose it without asking, and it shows a waiting screen instead of disappearing while PixyDeck has no picture |
-| 📞 **Call detection** | When an app opens the camera, tracking turns on; when the call ends, the lens turns away. Optionally switches to the PIXY microphone for the call and back afterwards |
+| 📞 **Call detection** | When an app opens the camera, tracking turns on; when the call ends, the lens turns away. Optionally switches the microphone and locks focus for a steady call image |
 | 🎙️ **Microphone** | The PIXY's noise cancelling, live or original mode |
 
 **Privacy and setup**
