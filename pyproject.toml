@@ -43,8 +43,11 @@ ai = [
 gpu = [
   "numpy>=1.24",
   "opencv-python-headless>=4.8",
-  "onnxruntime-gpu>=1.17",
-  "cupy-cuda12x>=13.0",
+  # Keep ONNX Runtime and CuPy on one self-contained CUDA 12 stack. The
+  # extras install cuBLAS/cuDNN/NVRTC and headers; a driver alone is not a
+  # complete user-space CUDA runtime.
+  "onnxruntime-gpu[cuda,cudnn]>=1.21,<1.24",
+  "cupy-cuda12x[ctk]>=14.0,<15",
 ]
 
 [project.urls]

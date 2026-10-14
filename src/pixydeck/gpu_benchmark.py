@@ -93,7 +93,12 @@ def main() -> int:
           f"{args.output[0]}x{args.output[1]} · chroma-key pipeline")
     measure_matting(image, args.frames, args.warmup)
     cpu_fps = measure("CPU", render, args.frames, args.warmup)
-    gpu_fps = measure("CUDA", lambda: render(renderer), args.frames, args.warmup)
+    try:
+        gpu_fps = measure("CUDA", lambda: render(renderer), args.frames, args.warmup)
+    except Exception as exc:  # noqa: BLE001 - turn package mismatch into actionable output
+        print(f"CUDA render failed: {exc}")
+        print("Re-run ./install.sh --gpu to install the bundled CUDA runtime and headers.")
+        return 3
     pool = cp.get_default_memory_pool()
     print(f"Speedup: {gpu_fps / cpu_fps:.2f}x · CuPy pool: "
           f"{pool.used_bytes() / 2**20:.0f} MiB used / {pool.total_bytes() / 2**20:.0f} MiB reserved")

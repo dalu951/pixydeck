@@ -226,6 +226,19 @@ class ModeTest(unittest.TestCase):
         self.assertEqual(options[0]["gpu_mem_limit"], str(512 * 1024 * 1024))
         self.assertEqual(options[1], {})
 
+    def test_matting_preloads_wheel_cuda_libraries(self):
+        session = mock.Mock()
+        session.get_providers.return_value = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        with (
+            mock.patch("pixydeck.background.onnxruntime.get_available_providers",
+                       return_value=["CUDAExecutionProvider", "CPUExecutionProvider"]),
+            mock.patch("pixydeck.background.onnxruntime.preload_dlls") as preload,
+            mock.patch("pixydeck.background.onnxruntime.InferenceSession", return_value=session),
+        ):
+            matting = Matting(threads=1)
+        preload.assert_called_once_with(directory="")
+        self.assertEqual(matting.provider, "CUDAExecutionProvider")
+
 
 @unittest.skipUnless(matting_available(), "RVM model / onnxruntime not installed")
 class MattingTest(unittest.TestCase):

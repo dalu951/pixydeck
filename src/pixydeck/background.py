@@ -160,6 +160,14 @@ class Matting:
         options.intra_op_num_threads = threads or max(2, min(6, (os.cpu_count() or 4) // 2))
         options.inter_op_num_threads = 1
         providers = matting_providers()
+        # GPU wheels keep NVIDIA libraries inside site-packages. Preloading
+        # makes them visible to the CUDA execution provider without requiring
+        # a system-wide toolkit or a manually maintained LD_LIBRARY_PATH.
+        if "CUDAExecutionProvider" in providers and hasattr(onnxruntime, "preload_dlls"):
+            try:
+                onnxruntime.preload_dlls(directory="")
+            except Exception as exc:  # noqa: BLE001 - ORT can still use CPU
+                log.warning("Could not preload ONNX CUDA libraries: %s", exc)
         self._session = onnxruntime.InferenceSession(
             str(MATTING_MODEL), options, providers=providers,
             provider_options=matting_provider_options(providers))
