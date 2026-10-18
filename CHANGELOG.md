@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.3 - 2026-10-18
 
 - **Green screen keeps you on a dimly lit screen**: the keying tolerance is capped by how colourful the detected screen is, so shadowed skin, dark hair and grey clothes are no longer keyed out with a faint green (they used to vanish, leaving only lips and eyes). The Effects tab says when the screen is too dim
 - **AI background keeps the frame rate when inference is temporarily slow**: matting moves to a latest-frame worker after it exceeds one 30 fps frame and returns automatically when it recovers; the HUD shows *AI BACKGROUND EASED* while masks may trail motion slightly

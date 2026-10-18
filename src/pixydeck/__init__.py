@@ -8,4 +8,4 @@ VIRTUAL_CAMERA_NAME = "EMEET PIXY (PixyDeck)"
 # Earlier names, still recognised until the device is recreated.
 LEGACY_VIRTUAL_CAMERA_NAMES = ("PixyDeck Virtual Camera",)
 
-__version__ = "0.5.2"
+__version__ = "0.5.3"
