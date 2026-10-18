@@ -13,6 +13,14 @@ from PySide6.QtWidgets import QColorDialog, QFileDialog, QHBoxLayout, QLabel, QP
 
 from . import VIRTUAL_CAMERA_NAME
 from .vision import Background, matting_available, vision_available
+
+try:
+    from .background import DIM_SCREEN, screen_colour
+except ImportError:  # pragma: no cover - without the AI extra there is no keying
+    DIM_SCREEN = 0.0
+
+    def screen_colour(_key) -> float:
+        return 1.0
 from .widgets import Card, Segmented, SliderRow
 
 
@@ -138,6 +146,8 @@ class BackgroundMixin:
             text = NEEDS_AI
         elif mode == "off":
             text = ""
+        elif mode in ("auto", "chroma") and green and screen_colour(self.processor.key) < DIM_SCREEN:
+            text = "🟢 Green screen detected – it is dimly lit; more light on it gives cleaner edges"
         elif mode in ("auto", "chroma") and green:
             text = "🟢 Green screen detected – keying it"
         elif mode in ("auto", "ai") and not matting_available():

@@ -15,6 +15,7 @@ mask - so it has to see frames in order on a single thread.
 from __future__ import annotations
 
 import logging
+import math
 import os
 import threading
 from dataclasses import dataclass, field
@@ -38,6 +39,12 @@ MATTING_SIZE = (960, 540)
 DEFAULT_KEY = (64.0, 85.0)
 # Distances are normalized by the largest possible chroma distance.
 MAX_CHROMA_DISTANCE = 181.0
+# Share of the screen's own chroma (its distance from grey) that the keying
+# tolerance and its soft edge may use at most.
+KEY_SIMILARITY_SHARE = 0.5
+KEY_SMOOTHNESS_SHARE = 0.3
+# Below this chroma (normalized) a detected screen is too dim for clean keying.
+DIM_SCREEN = 0.17
 
 
 def detect_green_screen(image: np.ndarray, min_share: float = 0.4) -> tuple[float, float] | None:
@@ -61,6 +68,11 @@ def detect_green_screen(image: np.ndarray, min_share: float = 0.4) -> tuple[floa
     return float(np.median(ycrcb[:, 1])), float(np.median(ycrcb[:, 2]))
 
 
+def screen_colour(key: tuple[float, float]) -> float:
+    """How colourful a keyed screen is: its chroma distance from grey, 0..1."""
+    return math.hypot(key[0] - 128.0, key[1] - 128.0) / MAX_CHROMA_DISTANCE
+
+
 def key_alpha(image: np.ndarray, key: tuple[float, float],
               similarity: float = 0.2, smoothness: float = 0.1) -> np.ndarray:
     """Foreground alpha in 0..1 (float32, same size as ``image``).
@@ -69,6 +81,13 @@ def key_alpha(image: np.ndarray, key: tuple[float, float],
     and gives naturally soft edges.
     """
     height, width = image.shape[:2]
+    # A dimly lit screen is only faintly green: its chroma lies close to grey,
+    # and so do shadowed skin, hair and dark clothes. Cap the tolerance by the
+    # screen's own colourfulness, so only what is clearly closer to the screen
+    # than to grey is keyed; a well-lit screen keeps the full slider range.
+    colour = screen_colour(key)
+    similarity = min(similarity, KEY_SIMILARITY_SHARE * colour)
+    smoothness = min(smoothness, KEY_SMOOTHNESS_SHARE * colour)
     small = cv2.resize(image, (width // 2, height // 2), interpolation=cv2.INTER_AREA)
     _y, cr, cb = cv2.split(cv2.cvtColor(small, cv2.COLOR_BGR2YCrCb))
     distance = cv2.magnitude(cr.astype(np.float32) - key[0], cb.astype(np.float32) - key[1])

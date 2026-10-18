@@ -85,6 +85,45 @@ def checkerboard(width=160, height=90, cell=4):
     return cv2.merge([board, board, board])
 
 
+class DimGreenScreenTest(unittest.TestCase):
+    """A badly lit screen is only faintly green; shadowed skin, dark hair and a
+    grey shirt are close to it in chroma and used to be keyed out with it."""
+
+    SCREEN = (50, 90, 45)       # dim green (BGR)
+    PERSON = {"skin in shadow": (70, 85, 105), "dark hair": (40, 40, 45), "grey shirt": (90, 95, 95)}
+
+    def scene(self, rng):
+        image = np.empty((180, 320, 3), np.uint8)
+        image[:] = self.SCREEN
+        x = 120
+        for colour in self.PERSON.values():
+            image[60:, x:x + 25] = colour
+            x += 30
+        noise = rng.normal(0, 4, image.shape)  # camera noise in low light
+        return np.clip(image + noise, 0, 255).astype(np.uint8)
+
+    def test_person_survives_a_dim_screen(self):
+        image = self.scene(np.random.default_rng(3))
+        key = detect_green_screen(image)
+        self.assertIsNotNone(key)
+        alpha = key_alpha(image, key)
+        x = 120
+        for name in self.PERSON:
+            with self.subTest(name):
+                self.assertGreater(alpha[90:170, x + 4:x + 21].mean(), 0.9)
+            x += 30
+        self.assertLess(alpha[10:50, 10:100].mean(), 0.1)  # the screen itself still goes
+
+    def test_bright_screen_keeps_the_full_tolerance(self):
+        from pixydeck import background
+        bright = (60.0, 85.0)
+        with mock.patch.object(background.cv2, "magnitude", wraps=background.cv2.magnitude):
+            image = np.full((40, 40, 3), (40, 200, 40), np.uint8)
+            self.assertLess(key_alpha(image, bright).mean(), 0.05)
+        colour = ((bright[0] - 128) ** 2 + (bright[1] - 128) ** 2) ** 0.5 / background.MAX_CHROMA_DISTANCE
+        self.assertGreater(background.KEY_SIMILARITY_SHARE * colour, 0.2)  # the 20 % default is not capped
+
+
 class HelperTest(unittest.TestCase):
     def test_despill_strength_zero_is_a_no_op(self):
         image = np.full((4, 4, 3), (10, 200, 10), np.uint8)

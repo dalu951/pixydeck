@@ -60,6 +60,8 @@ class BackgroundStatusTest(PanelCase):
             ("chroma", None, True, "Waiting for a green screen in the picture…"),
             ("chroma", (0.3, 0.2), True, "🟢 Green screen detected – keying it"),
             ("auto", (0.3, 0.2), True, "🟢 Green screen detected – keying it"),
+            ("chroma", (109.0, 116.0), True,
+             "🟢 Green screen detected – it is dimly lit; more light on it gives cleaner edges"),
             ("auto", None, True, "🧠 AI cutout active – no green screen in view"),
             ("ai", None, True, "🧠 AI cutout active"),
             ("ai", (0.3, 0.2), True, "🧠 AI cutout active"),
