@@ -91,6 +91,7 @@ Effects show in the preview, in snapshots and in *EMEET PIXY (PixyDeck)*. An app
 | **Keep focus steady during calls** | Locks the current focus at call start to prevent hunting; releases only this temporary lock afterwards |
 | **Privacy when idle** / **Idle time** | Enter privacy after the chosen minutes without any app using the camera (paused while the preview is visible) |
 | **Wake when an app needs the camera** | Leave privacy as soon as an app opens the camera |
+| **Privacy when PixyDeck closes** | Turns the lens away when you close PixyDeck – not while another app uses the real camera. The next start resumes the previous mode |
 | **Microphone** | The PIXY's sound: *Noise cancel* · *Live* · *Original* |
 | **Mute in privacy mode** | Mutes the PIXY microphone while the lens is turned away |
 

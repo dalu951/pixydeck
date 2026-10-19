@@ -91,6 +91,7 @@ Die Effekte erscheinen in der Vorschau, in Schnappschüssen und in *EMEET PIXY (
 | **Keep focus steady during calls** | Sperrt den aktuellen Fokus beim Anrufstart gegen Pumpen und löst danach nur diese vorübergehende Sperre |
 | **Privacy when idle** / **Idle time** | Nach der eingestellten Zeit ohne App an der Kamera in den Privacy-Modus (pausiert, solange die Vorschau sichtbar ist) |
 | **Wake when an app needs the camera** | Privacy-Modus verlassen, sobald eine App die Kamera öffnet |
+| **Privacy when PixyDeck closes** | Dreht die Linse weg, wenn du PixyDeck schließt – nicht, solange eine andere App die echte Kamera nutzt. Beim nächsten Start geht es im vorherigen Modus weiter |
 | **Microphone** | Klang der PIXY: *Noise cancel* (Geräuschunterdrückung) · *Live* · *Original* |
 | **Mute in privacy mode** | Schaltet das PIXY-Mikrofon stumm, solange die Linse weggedreht ist |
 

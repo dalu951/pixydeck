@@ -194,10 +194,10 @@ class ControlsTest(GuiTestCase):
             mute.assert_called_with(False)
 
     def test_opening_window_resumes_mode_from_before_privacy(self):
+        self.close_window()
         settings = QSettings("pixydeck", "pixydeck")
         settings.setValue("camera/tracking", "privacy")
         settings.setValue("camera/mode_before_privacy", "track")
-        self.close_window()
         self.window = gui.PixyGUI()
         self.controller = self.window.controller
         self.assertEqual(self.window.tracking_mode, "track")
@@ -654,6 +654,60 @@ class FindMeTest(GuiTestCase):
         self.controller = self.window.controller
         self.assertEqual(self.window.seat_tilt, -7.4)
         self.assertTrue(self.window.find_me.isChecked())
+
+
+
+class PrivacyOnExitTest(GuiTestCase):
+    """Closing PixyDeck turns the lens away – unless an app uses the camera."""
+
+    def close_and_reopen(self):
+        self.window.close()
+        settings = QSettings("pixydeck", "pixydeck")
+        tracking, before = settings.value("camera/tracking"), settings.value("camera/mode_before_privacy")
+        self.close_window()
+        self.window = gui.PixyGUI()
+        self.controller = self.window.controller
+        return tracking, before
+
+    def test_closing_turns_the_lens_away_and_reopening_resumes(self):
+        w = self.window
+        w.set_tracking_mode("track")
+        self.assertTrue(self.settle(lambda: ("tracking", "track") in self.controller.calls))
+        controller = self.controller
+        tracking, before = self.close_and_reopen()
+        self.assertIn(("tracking", "privacy"), controller.calls)
+        self.assertEqual((tracking, before), ("privacy", "track"))
+        self.assertEqual(self.window.tracking_mode, "track")  # the next start resumes tracking
+
+    def test_not_while_an_app_reads_the_real_camera(self):
+        controller = self.controller
+        with mock.patch.object(privacy, "camera_users", return_value=[(77, "zoom")]), \
+                mock.patch.object(privacy, "physical_pixy_nodes", return_value=["/dev/video1"]):
+            self.window.close()
+        self.assertNotIn(("tracking", "privacy"), controller.calls)
+
+    def test_switch_off(self):
+        self.window.privacy_on_close.setChecked(False)
+        controller = self.controller
+        self.window.close()
+        self.assertNotIn(("tracking", "privacy"), controller.calls)
+        self.assertFalse(QSettings("pixydeck", "pixydeck").value("privacy/on_close", type=bool))
+
+    def test_already_in_privacy_keeps_the_remembered_mode(self):
+        w = self.window
+        w.set_tracking_mode("track")
+        w.set_tracking_mode("privacy")
+        _tracking, before = self.close_and_reopen()
+        self.assertEqual(before, "track")
+
+    def test_camera_error_does_not_block_closing(self):
+        with mock.patch.object(self.controller, "tracking", side_effect=gui.backend.PixyError("unplugged"),
+                               create=True), self.assertLogs("pixydeck.gui", "WARNING"):
+            self.window.close()
+        self.assertTrue(self.window.isHidden())
+
+    def test_on_by_default(self):
+        self.assertTrue(self.window.privacy_on_close.isChecked())
 
 
 if __name__ == "__main__":

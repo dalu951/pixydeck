@@ -128,6 +128,10 @@ class ControlsMixin:
         self.privacy_wake = ToggleSwitch()
         self.privacy_wake.toggled.connect(lambda v: self.settings.setValue("privacy/wake", v))
         privacy.body.addWidget(SettingRow("Wake when an app needs the camera", self.privacy_wake))
+        self.privacy_on_close = ToggleSwitch()
+        self.privacy_on_close.toggled.connect(lambda v: self.settings.setValue("privacy/on_close", v))
+        privacy.body.addWidget(SettingRow("Privacy when PixyDeck closes", self.privacy_on_close,
+                                          "Not while another app uses the camera directly"))
         self.privacy_status = QLabel("", objectName="subtle")
         privacy.body.addWidget(self.privacy_status)
         layout.addWidget(privacy)

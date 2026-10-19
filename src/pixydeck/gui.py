@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import APP_ID, APP_NAME, __version__, backend
+from . import privacy as privacy_checks
 from .backend import PixyController
 from .background_panel import BackgroundMixin
 from .constants import (
@@ -519,6 +520,7 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
         self.privacy_enabled.set_silently(self.bool_setting("privacy/enabled"))
         self.privacy_minutes.setValue(self.int_setting("privacy/minutes", 10))
         self.privacy_wake.set_silently(self.bool_setting("privacy/wake", True))
+        self.privacy_on_close.set_silently(self.bool_setting("privacy/on_close", True))
         self.privacy_mic.set_silently(self.bool_setting("privacy/mute_mic") and bool(PACTL))
         # On by default: apps find "EMEET PIXY (PixyDeck)" without anyone pressing Start.
         self.virtual_autostart.set_silently(self.bool_setting("virtual/autostart", True))
@@ -1156,7 +1158,31 @@ class PixyGUI(ControlsMixin, PresetsMixin, BackgroundMixin, PrivacyMixin, Virtua
     # Exit
     # ------------------------------------------------------------------
 
+    def privacy_on_exit(self) -> None:
+        """Turn the lens away as PixyDeck closes, unless an app is using the camera.
+
+        The previous mode is remembered, so the next start resumes it.
+        """
+        if not self.privacy_on_close.isChecked() or self.tracking_mode == "privacy":
+            return
+        try:
+            # Only apps on the real camera count: the virtual camera stops with PixyDeck anyway.
+            users = privacy_checks.camera_users(privacy_checks.physical_pixy_nodes(), self.own_pids())
+        except OSError:
+            users = []
+        if users:
+            log.info("Not entering privacy on exit: %s uses the camera", users[0][1])
+            return
+        self.mode_before_privacy = self.tracking_mode
+        self.settings.setValue("camera/mode_before_privacy", self.mode_before_privacy)
+        self.settings.setValue("camera/tracking", "privacy")
+        try:
+            self.controller.tracking("privacy")
+        except backend.PixyError as exc:
+            log.warning("Could not enter privacy on exit: %s", exc)
+
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
+        self.privacy_on_exit()  # before the virtual camera stops: own_pids() still lists its FFmpeg
         try:
             pan, tilt, _zoom = self.controller.position()
             self.position = (pan, tilt)
