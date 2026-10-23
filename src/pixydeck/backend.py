@@ -728,6 +728,14 @@ class PixyController:
         self.set("zoom_absolute", clamp(zoom, ZOOM_MIN, ZOOM_MAX))
 
     def tracking(self, mode: str) -> None:
+        if mode == "privacy":
+            # Face the front first: tilted down at an angle the lens hangs
+            # beside the base instead of tucking into it like the privacy
+            # button does from the centre.
+            try:
+                self.set("pan_absolute", 0)
+            except PixyError:
+                pass  # privacy matters more than the position
         set_tracking(self.hid_device(), TRACKING_MODES[mode])
 
     def gesture(self, enabled: bool) -> None:
@@ -788,6 +796,13 @@ def execute(command: str, value: str | None = None) -> str:
 
     tracking_messages = {"idle": "Tracking OFF (idle)", "track": "Tracking ON", "privacy": "Privacy mode ON"}
     if command in tracking_messages:
+        if command == "privacy":
+            video = find_video_device()
+            if video is not None:
+                try:
+                    set_control(video, "pan_absolute", 0)  # tuck in from the front, as PixyController does
+                except PixyError:
+                    pass
         set_tracking(hid, TRACKING_MODES[command])
         return tracking_messages[command]
     if command == "gesture-on":

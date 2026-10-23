@@ -167,6 +167,14 @@ class CliV4L2Test(V4L2TestCase):
         patch.start()
         self.addCleanup(patch.stop)
 
+    def test_privacy_faces_the_front_first(self):
+        backend.execute("pan", "35")
+        with mock.patch.object(backend, "find_hidraw_device", return_value="/dev/hidrawX"), \
+                mock.patch.object(backend, "set_tracking") as set_tracking:
+            self.assertEqual(backend.execute("privacy"), "Privacy mode ON")
+        self.assertEqual(self.v4l2.get("pan_absolute"), 0)
+        set_tracking.assert_called_once()
+
     def test_steps_and_limits(self):
         backend.execute("right")
         backend.execute("up")
@@ -269,6 +277,31 @@ class ControllerTest(V4L2TestCase):
         with mock.patch.object(backend, "find_hidraw_device", return_value="/dev/hidrawX"), \
                 mock.patch.object(backend, "get_motor_position", return_value=None):
             self.assertEqual(self.controller.position(), (10, 5, backend.ZOOM_MIN))
+
+    def test_privacy_faces_the_front_first(self):
+        self.controller.move_to(40, 10)
+        with mock.patch.object(backend, "find_hidraw_device", return_value="/dev/hidrawX"), \
+                mock.patch.object(backend, "set_tracking",
+                                  side_effect=lambda _dev, _mode: order.append(self.v4l2.get("pan_absolute"))):
+            order = []
+            self.controller.tracking("privacy")
+        self.assertEqual(order, [0])  # pan was 0 when privacy was sent
+        self.assertEqual(self.v4l2.get("tilt_absolute"), 10 * backend.DEGREE_UNIT)
+
+    def test_other_modes_keep_the_position(self):
+        self.controller.move_to(40, 10)
+        with mock.patch.object(backend, "find_hidraw_device", return_value="/dev/hidrawX"), \
+                mock.patch.object(backend, "set_tracking"):
+            self.controller.tracking("track")
+            self.controller.tracking("idle")
+        self.assertEqual(self.v4l2.get("pan_absolute"), 40 * backend.DEGREE_UNIT)
+
+    def test_privacy_still_sent_when_pan_fails(self):
+        self.v4l2.fail_next = 2  # the pan ioctl and its retry fail
+        with mock.patch.object(backend, "find_hidraw_device", return_value="/dev/hidrawX"), \
+                mock.patch.object(backend, "set_tracking") as set_tracking:
+            self.controller.tracking("privacy")
+        set_tracking.assert_called_once_with("/dev/hidrawX", backend.TRACKING_MODES["privacy"])
 
     def test_flicker_and_query(self):
         self.controller.flicker("60")

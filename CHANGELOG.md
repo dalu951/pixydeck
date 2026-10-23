@@ -3,6 +3,7 @@
 ## Unreleased
 
 - **Privacy when PixyDeck closes** (Calls tab, on by default): closing PixyDeck turns the lens away – not while another app reads the real camera – and the next start resumes the previous mode
+- Privacy mode now faces the camera front first (pan 0°), so the lens tucks into the base like the privacy button instead of hanging beside it
 
 ## 0.5.3 - 2026-10-18
 
