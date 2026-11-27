@@ -187,9 +187,16 @@ class Matting:
                 onnxruntime.preload_dlls(directory="")
             except Exception as exc:  # noqa: BLE001 - ORT can still use CPU
                 log.warning("Could not preload ONNX CUDA libraries: %s", exc)
-        self._session = onnxruntime.InferenceSession(
-            str(MATTING_MODEL), options, providers=providers,
-            provider_options=matting_provider_options(providers))
+        try:
+            self._session = onnxruntime.InferenceSession(
+                str(MATTING_MODEL), options, providers=providers,
+                provider_options=matting_provider_options(providers))
+        except Exception as exc:  # noqa: BLE001 - e.g. cuDNN/CUDA version mismatch
+            if providers == ["CPUExecutionProvider"] or not providers:
+                raise
+            log.warning("GPU provider %s failed (%s); falling back to CPU", providers[0], exc)
+            self._session = onnxruntime.InferenceSession(
+                str(MATTING_MODEL), options, providers=["CPUExecutionProvider"])
         self.provider = self._session.get_providers()[0]
         log.info("AI matting provider: %s", self.provider)
         self._ratio = np.array([0.4], np.float32)

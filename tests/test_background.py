@@ -279,6 +279,21 @@ class ModeTest(unittest.TestCase):
         self.assertEqual(matting.provider, "CUDAExecutionProvider")
 
 
+    def test_matting_falls_back_to_cpu_when_gpu_provider_fails(self):
+        cpu_session = mock.Mock()
+        cpu_session.get_providers.return_value = ["CPUExecutionProvider"]
+        sessions = mock.Mock(side_effect=[RuntimeError("undefined symbol: cudnn..."), cpu_session])
+        with (
+            mock.patch("pixydeck.background.onnxruntime.get_available_providers",
+                       return_value=["CUDAExecutionProvider", "CPUExecutionProvider"]),
+            mock.patch("pixydeck.background.onnxruntime.preload_dlls"),
+            mock.patch("pixydeck.background.onnxruntime.InferenceSession", sessions),
+        ):
+            matting = Matting(threads=1)
+        self.assertEqual(matting.provider, "CPUExecutionProvider")
+        self.assertEqual(sessions.call_args.kwargs["providers"], ["CPUExecutionProvider"])
+
+
 @unittest.skipUnless(matting_available(), "RVM model / onnxruntime not installed")
 class MattingTest(unittest.TestCase):
     def test_alpha_has_model_size_and_range(self):
