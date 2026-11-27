@@ -15,6 +15,7 @@ Start with **⚙ Setup** in PixyDeck – it checks permissions, the kernel modul
 | **AI options are greyed out** | OpenCV/ONNX Runtime are missing. Packages install them; with `install.sh` run `~/.local/share/pixydeck/venv/bin/pip install 'pixydeck[ai]'` from the source folder. |
 | **Low frame rate with AI background** | With `--gpu`, ONNX matting runs through CUDA when available. If inference still exceeds one frame, PixyDeck preserves output speed using the newest completed matte; the HUD shows *AI BACKGROUND EASED* and edges can trail fast motion slightly. Close other GPU-heavy programs, use 1080p, or use a green screen. |
 | **`--gpu` still uses the CPU** | Run `nvidia-smi`, then `~/.local/share/pixydeck/venv/bin/pixydeck-gpu-benchmark`. The log names the CUDA device or the fallback reason. `PIXYDECK_DISABLE_CUDA=1` also forces CPU rendering. |
+| **`undefined symbol: cudnn…` / CUDA provider fails to load (Arch, CachyOS)** | The distro's `python-onnxruntime-opt-cuda` was built against a different cuDNN than the installed `cudnn`. PixyDeck falls back to the CPU automatically. For GPU use, install with `./install.sh --gpu`: it uses its own venv with the `onnxruntime-gpu` wheel and bundled CUDA/cuDNN libraries, independent of the system packages. |
 | **The camera tilts into its base** | Positions below −52° are blocked since 0.3.0; store the preset again. |
 | **Warning about `libvdpau_nvidia.so`** | Qt probes optional hardware decoders; harmless if the preview works. |
 
